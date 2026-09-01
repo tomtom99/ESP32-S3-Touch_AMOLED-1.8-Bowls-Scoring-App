@@ -178,8 +178,8 @@ void AppController::onSetupStart(lv_event_t*) {
 
 void AppController::startNewGame(GameType type, const std::vector<std::string>& team1Names,
                                   const std::vector<std::string>& team2Names) {
-    currentGame_.emplace(type, team1Names, team2Names,
-                          static_cast<uint32_t>(lv_tick_get() / 1000));
+    currentGame_ = std::unique_ptr<BowlsGame>(new BowlsGame(
+        type, team1Names, team2Names, static_cast<uint32_t>(lv_tick_get() / 1000)));
     showScoring();
 }
 

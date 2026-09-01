@@ -38,7 +38,10 @@ bool BowlsGame::recordEnd(int team1Score, int team2Score) {
         return false;
     }
 
-    ends_.push_back(EndResult{team1Score, team2Score});
+    EndResult endResult;
+    endResult.team1Score = team1Score;
+    endResult.team2Score = team2Score;
+    ends_.push_back(endResult);
     team1_.score += team1Score;
     team2_.score += team2Score;
     return true;

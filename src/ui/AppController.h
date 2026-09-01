@@ -3,7 +3,6 @@
 #include <lvgl.h>
 
 #include <memory>
-#include <optional>
 
 #include "core/BowlsGame.h"
 #include "core/GameHistory.h"
@@ -62,7 +61,7 @@ private:
 
     GameStorage& storage_;
     GameHistory history_;
-    std::optional<BowlsGame> currentGame_;
+    std::unique_ptr<BowlsGame> currentGame_;
     GameType pendingType_ = GameType::Singles;
 
     // Text areas for entering player names on the setup screen.
