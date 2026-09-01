@@ -9,14 +9,16 @@ namespace {
 constexpr lv_coord_t kButtonWidth = 150;
 constexpr lv_coord_t kButtonHeight = 56;
 constexpr lv_coord_t kMenuButtonWidth = 230;
-constexpr lv_coord_t kSmallButtonWidth = 96;
-constexpr lv_coord_t kSmallButtonHeight = 40;
+constexpr lv_coord_t kSetupButtonWidth = 160;
+constexpr lv_coord_t kSetupButtonHeight = 76;
+constexpr lv_coord_t kStartButtonWidth = 190;
+constexpr lv_coord_t kStartButtonHeight = 80;
 
-// Slider positions, left (0) to right (4). The value chosen determines
-// which side scores and by how much for the end just played.
-constexpr int32_t kSliderMin = 0;
-constexpr int32_t kSliderMax = 4;
-constexpr int32_t kSliderDeadEnd = 2;
+// "Slide to record"/"Swipe to end game" controls only count as a deliberate
+// swipe (rather than a stray tap landing far enough along the track to look
+// like a completed drag) once the touch point has moved at least this many
+// pixels horizontally between press and release.
+constexpr int32_t kMinSwipeDistance = 60;
 
 // "Slide to record" control: dragging the knob past this fraction of the
 // track confirms the action; releasing early snaps the knob back to zero.
@@ -46,22 +48,23 @@ void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
 }
 
-// Returns the display text for a given slider position.
-const char* sliderValueText(int32_t value) {
-    switch (value) {
-        case 0: return "2 DOWN";
-        case 1: return "1 DOWN";
-        case 2: return "DEAD END";
-        case 3: return "1 UP";
-        case 4: return "2 UP";
-        default: return "";
+// Fills buf with the display text for a given slider position, where
+// `center` is the slider value that represents a dead end (i.e. the value
+// halfway along the track, equal to the game's maxPerEnd()).
+void sliderValueText(char* buf, size_t bufSize, int32_t value, int32_t center) {
+    const int32_t diff = value - center;
+    if (diff == 0) {
+        std::snprintf(buf, bufSize, "DEAD END");
+    } else {
+        std::snprintf(buf, bufSize, "%ld %s", static_cast<long>(diff > 0 ? diff : -diff),
+                      diff > 0 ? "UP" : "DOWN");
     }
 }
 
 // Colour-codes the slider label so the direction is obvious at a glance.
-lv_color_t sliderValueColor(int32_t value) {
-    if (value > kSliderDeadEnd) return lv_palette_main(LV_PALETTE_GREEN);
-    if (value < kSliderDeadEnd) return lv_palette_main(LV_PALETTE_RED);
+lv_color_t sliderValueColor(int32_t value, int32_t center) {
+    if (value > center) return lv_palette_main(LV_PALETTE_GREEN);
+    if (value < center) return lv_palette_main(LV_PALETTE_RED);
     return lv_palette_main(LV_PALETTE_GREY);
 }
 
@@ -148,8 +151,8 @@ void AppController::showNewGameSetup() {
 
     lv_obj_t* typeRow = lv_obj_create(screen);
     stylePanel(typeRow);
-    lv_obj_set_size(typeRow, LV_PCT(94), 82);
-    lv_obj_align(typeRow, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_set_size(typeRow, LV_PCT(94), 100);
+    lv_obj_align(typeRow, LV_ALIGN_CENTER, 0, -24);
     lv_obj_set_flex_flow(typeRow, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(typeRow, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -159,7 +162,7 @@ void AppController::showNewGameSetup() {
     lv_obj_add_state(singlesBtn, LV_STATE_CHECKED);
     lv_obj_add_event_cb(singlesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_set_user_data(singlesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Singles)));
-    styleButton(singlesBtn, 140, kButtonHeight);
+    styleButton(singlesBtn, kSetupButtonWidth, kSetupButtonHeight);
     lv_obj_t* singlesLabel = lv_label_create(singlesBtn);
     lv_label_set_text(singlesLabel, "Singles");
     lv_obj_center(singlesLabel);
@@ -168,13 +171,13 @@ void AppController::showNewGameSetup() {
     lv_obj_add_flag(doublesBtn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_event_cb(doublesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_set_user_data(doublesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Doubles)));
-    styleButton(doublesBtn, 140, kButtonHeight);
+    styleButton(doublesBtn, kSetupButtonWidth, kSetupButtonHeight);
     lv_obj_t* doublesLabel = lv_label_create(doublesBtn);
     lv_label_set_text(doublesLabel, "Doubles");
     lv_obj_center(doublesLabel);
 
     lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupStart);
-    styleButton(startBtn, 150, kButtonHeight);
+    styleButton(startBtn, kStartButtonWidth, kStartButtonHeight);
     lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
@@ -217,24 +220,39 @@ void AppController::startNewGame(GameType type) {
 
 void AppController::showScoring() {
     lv_obj_t* screen = createScreen();
+    editingEndIndex_ = -1;
+    const int32_t maxPerEnd = currentGame_->maxPerEnd();
 
-    // Small top bar: Undo (left) and End Game (right), keeping the rest of
-    // the tiny 1.8" screen for the ends table and the scoring slider.
-    lv_obj_t* undoBtn = addButton(screen, "Undo", onUndoEnd);
-    styleButton(undoBtn, kSmallButtonWidth, kSmallButtonHeight);
-    lv_obj_align(undoBtn, LV_ALIGN_TOP_LEFT, 0, 0);
+    // Thin "swipe to end game" bar across the top, keeping the rest of the
+    // tiny 1.8" screen for the ends table and the scoring slider.
+    endGameSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(endGameSlider_, 0, kRecordSliderMax);
+    lv_slider_set_value(endGameSlider_, 0, LV_ANIM_OFF);
+    lv_obj_set_size(endGameSlider_, LV_PCT(100), 32);
+    lv_obj_align(endGameSlider_, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_radius(endGameSlider_, 16, 0);
+    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_darken(LV_PALETTE_GREY, 3), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_main(LV_PALETTE_RED), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(endGameSlider_, 16, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(endGameSlider_, lv_color_white(), LV_PART_KNOB);
+    lv_obj_set_style_radius(endGameSlider_, 14, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(endGameSlider_, 2, LV_PART_KNOB);
+    lv_obj_add_event_cb(endGameSlider_, onEndGameSliderPressed, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(endGameSlider_, onEndGameSliderReleased, LV_EVENT_RELEASED, nullptr);
 
-    lv_obj_t* endGameBtn = addButton(screen, "End", onEndGame);
-    styleButton(endGameBtn, kSmallButtonWidth, kSmallButtonHeight);
-    lv_obj_align(endGameBtn, LV_ALIGN_TOP_RIGHT, 0, 0);
+    endGameSliderLabel_ = lv_label_create(endGameSlider_);
+    lv_label_set_text(endGameSliderLabel_, "Swipe to End Game");
+    lv_obj_clear_flag(endGameSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_center(endGameSliderLabel_);
 
     // Scrollable table of every end played so far, plus running totals.
     // Columns: Home score | Home total | End # | Away score | Away total.
+    // Long-pressing a row opens a menu to edit or delete that end.
     endsTableContainer_ = lv_obj_create(screen);
     lv_obj_set_style_pad_all(endsTableContainer_, 0, 0);
     lv_obj_set_scroll_dir(endsTableContainer_, LV_DIR_VER);
     lv_obj_set_size(endsTableContainer_, LV_PCT(100), 210);
-    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 48);
+    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 40);
 
     endsTable_ = lv_table_create(endsTableContainer_);
     lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
@@ -245,11 +263,13 @@ void AppController::showScoring() {
     lv_table_set_col_width(endsTable_, 3, 70);
     lv_table_set_col_width(endsTable_, 4, 86);
     lv_obj_add_event_cb(endsTable_, onEndsTableDrawPart, LV_EVENT_DRAW_PART_BEGIN, nullptr);
+    lv_obj_add_event_cb(endsTable_, onEndsTableLongPressed, LV_EVENT_LONG_PRESSED, nullptr);
 
     // Big, ever-visible slider for choosing the outcome of the current end.
+    // Range is 0..2*maxPerEnd so doubles games can score up to 4 up/4 down.
     slider_ = lv_slider_create(screen);
-    lv_slider_set_range(slider_, kSliderMin, kSliderMax);
-    lv_slider_set_value(slider_, kSliderDeadEnd, LV_ANIM_OFF);
+    lv_slider_set_range(slider_, 0, maxPerEnd * 2);
+    lv_slider_set_value(slider_, maxPerEnd, LV_ANIM_OFF);
     lv_obj_set_size(slider_, LV_PCT(92), 40);
     lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 268);
 
@@ -270,6 +290,7 @@ void AppController::showScoring() {
     lv_obj_set_style_bg_color(recordSlider_, lv_color_white(), LV_PART_KNOB);
     lv_obj_set_style_radius(recordSlider_, 28, LV_PART_KNOB);
     lv_obj_set_style_pad_all(recordSlider_, 4, LV_PART_KNOB);
+    lv_obj_add_event_cb(recordSlider_, onRecordSliderPressed, LV_EVENT_PRESSED, nullptr);
     lv_obj_add_event_cb(recordSlider_, onRecordSliderReleased, LV_EVENT_RELEASED, nullptr);
 
     recordSliderLabel_ = lv_label_create(recordSlider_);
@@ -278,13 +299,16 @@ void AppController::showScoring() {
     lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(recordSliderLabel_);
 
-    updateSliderLabel(kSliderDeadEnd);
+    updateSliderLabel(maxPerEnd);
     refreshEndsTable();
 }
 
 void AppController::updateSliderLabel(int32_t value) {
-    lv_label_set_text(sliderLabel_, sliderValueText(value));
-    lv_obj_set_style_text_color(sliderLabel_, sliderValueColor(value), 0);
+    const int32_t center = currentGame_->maxPerEnd();
+    char buf[16];
+    sliderValueText(buf, sizeof(buf), value, center);
+    lv_label_set_text(sliderLabel_, buf);
+    lv_obj_set_style_text_color(sliderLabel_, sliderValueColor(value, center), 0);
 }
 
 void AppController::onSliderChanged(lv_event_t* e) {
@@ -293,25 +317,64 @@ void AppController::onSliderChanged(lv_event_t* e) {
 }
 
 void AppController::onRecordEnd(lv_event_t*) {
+    const int32_t maxPerEnd = s_instance->currentGame_->maxPerEnd();
     const int32_t value = lv_slider_get_value(s_instance->slider_);
-    switch (value) {
-        case 0: s_instance->recordEnd(0, 2); break;
-        case 1: s_instance->recordEnd(0, 1); break;
-        case 2: s_instance->recordDeadEnd(); break;
-        case 3: s_instance->recordEnd(1, 0); break;
-        case 4: s_instance->recordEnd(2, 0); break;
-        default: break;
+    const int32_t diff = value - maxPerEnd;
+    const int team1Score = diff > 0 ? static_cast<int>(diff) : 0;
+    const int team2Score = diff < 0 ? static_cast<int>(-diff) : 0;
+
+    if (s_instance->editingEndIndex_ >= 0) {
+        s_instance->currentGame_->editEnd(static_cast<size_t>(s_instance->editingEndIndex_),
+                                          team1Score, team2Score);
+        s_instance->editingEndIndex_ = -1;
+        lv_label_set_text(s_instance->recordSliderLabel_, "Slide to Record End");
+        s_instance->refreshEndsTable();
+    } else if (diff == 0) {
+        s_instance->recordDeadEnd();
+    } else {
+        s_instance->recordEnd(team1Score, team2Score);
     }
-    lv_slider_set_value(s_instance->slider_, kSliderDeadEnd, LV_ANIM_OFF);
-    s_instance->updateSliderLabel(kSliderDeadEnd);
+
+    lv_slider_set_value(s_instance->slider_, maxPerEnd, LV_ANIM_OFF);
+    s_instance->updateSliderLabel(maxPerEnd);
+}
+
+void AppController::onRecordSliderPressed(lv_event_t*) {
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_get_act(), &point);
+    s_instance->recordSliderPressX_ = point.x;
 }
 
 void AppController::onRecordSliderReleased(lv_event_t* e) {
     lv_obj_t* recordSlider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (lv_slider_get_value(recordSlider) >= kRecordThreshold) {
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_get_act(), &point);
+    const int32_t dragDistance = point.x - s_instance->recordSliderPressX_;
+    // Require both a completed drag past the threshold AND real horizontal
+    // movement, so a single tap on the right-hand side of the track can't
+    // masquerade as a swipe.
+    if (lv_slider_get_value(recordSlider) >= kRecordThreshold && dragDistance >= kMinSwipeDistance) {
         onRecordEnd(nullptr);
     }
     lv_slider_set_value(recordSlider, 0, LV_ANIM_ON);
+}
+
+void AppController::onEndGameSliderPressed(lv_event_t*) {
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_get_act(), &point);
+    s_instance->endGameSliderPressX_ = point.x;
+}
+
+void AppController::onEndGameSliderReleased(lv_event_t* e) {
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_get_act(), &point);
+    const int32_t dragDistance = point.x - s_instance->endGameSliderPressX_;
+    if (lv_slider_get_value(slider) >= kRecordThreshold && dragDistance >= kMinSwipeDistance) {
+        s_instance->endCurrentGame();
+        return;  // Screen was destroyed; don't touch the slider below.
+    }
+    lv_slider_set_value(slider, 0, LV_ANIM_ON);
 }
 
 void AppController::recordEnd(int team1Score, int team2Score) {
@@ -387,13 +450,90 @@ void AppController::onEndsTableDrawPart(lv_event_t* e) {
     }
 }
 
-void AppController::onUndoEnd(lv_event_t*) {
-    s_instance->currentGame_->undoLastEnd();
+void AppController::onEndsTableLongPressed(lv_event_t* e) {
+    lv_obj_t* table = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    uint16_t row = 0;
+    uint16_t col = 0;
+    lv_table_get_selected_cell(table, &row, &col);
+    if (row == LV_TABLE_CELL_NONE || row == 0) return;  // no cell, or the header row
+    s_instance->showEndMenu(static_cast<int>(row) - 1);
+}
+
+void AppController::showEndMenu(int endIndex) {
+    if (endMenuOverlay_ != nullptr) return;
+    endMenuIndex_ = endIndex;
+
+    endMenuOverlay_ = lv_obj_create(lv_scr_act());
+    lv_obj_remove_style_all(endMenuOverlay_);
+    lv_obj_set_size(endMenuOverlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(endMenuOverlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(endMenuOverlay_, LV_OPA_50, 0);
+    lv_obj_clear_flag(endMenuOverlay_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(endMenuOverlay_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(endMenuOverlay_, onEndMenuCancel, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t* panel = lv_obj_create(endMenuOverlay_);
+    stylePanel(panel);
+    lv_obj_set_size(panel, 200, 200);
+    lv_obj_center(panel);
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t* titleLabel = lv_label_create(panel);
+    lv_label_set_text_fmt(titleLabel, "End %d", endIndex + 1);
+    styleBodyLabel(titleLabel);
+
+    lv_obj_t* editBtn = addButton(panel, "Edit", onEndMenuEdit);
+    styleButton(editBtn, 160, 48);
+
+    lv_obj_t* deleteBtn = addButton(panel, "Delete", onEndMenuDelete);
+    styleButton(deleteBtn, 160, 48);
+    lv_obj_set_style_bg_color(deleteBtn, lv_palette_main(LV_PALETTE_RED), 0);
+
+    lv_obj_t* cancelBtn = addButton(panel, "Cancel", onEndMenuCancel);
+    styleButton(cancelBtn, 160, 48);
+}
+
+void AppController::closeEndMenu() {
+    if (endMenuOverlay_ != nullptr) {
+        lv_obj_del(endMenuOverlay_);
+        endMenuOverlay_ = nullptr;
+    }
+    endMenuIndex_ = -1;
+}
+
+void AppController::onEndMenuEdit(lv_event_t*) {
+    const int index = s_instance->endMenuIndex_;
+    s_instance->closeEndMenu();
+    if (index < 0) return;
+
+    const EndResult& end = s_instance->currentGame_->ends()[static_cast<size_t>(index)];
+    const int32_t maxPerEnd = s_instance->currentGame_->maxPerEnd();
+    int32_t value = maxPerEnd;
+    if (end.team1Score > 0) {
+        value = maxPerEnd + end.team1Score;
+    } else if (end.team2Score > 0) {
+        value = maxPerEnd - end.team2Score;
+    }
+
+    s_instance->editingEndIndex_ = index;
+    lv_slider_set_value(s_instance->slider_, value, LV_ANIM_OFF);
+    s_instance->updateSliderLabel(value);
+    lv_label_set_text(s_instance->recordSliderLabel_, "Slide to Save Edit");
+}
+
+void AppController::onEndMenuDelete(lv_event_t*) {
+    const int index = s_instance->endMenuIndex_;
+    s_instance->closeEndMenu();
+    if (index < 0) return;
+
+    s_instance->currentGame_->removeEnd(static_cast<size_t>(index));
     s_instance->refreshEndsTable();
 }
 
-void AppController::onEndGame(lv_event_t*) {
-    s_instance->endCurrentGame();
+void AppController::onEndMenuCancel(lv_event_t*) {
+    s_instance->closeEndMenu();
 }
 
 void AppController::endCurrentGame() {

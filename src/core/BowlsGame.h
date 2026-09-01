@@ -72,6 +72,19 @@ public:
     // false if there are no ends to undo or the game is finished.
     bool undoLastEnd();
 
+    // Removes the end at the given index (not necessarily the last one),
+    // adjusting each side's total score accordingly. Returns false if index
+    // is out of range or the game has already been finished.
+    bool removeEnd(size_t index);
+
+    // Replaces the result of the end at the given index with a new result,
+    // adjusting each side's total score accordingly. Follows the same
+    // validation rules as recordEnd(), except that (0, 0) is allowed here
+    // to convert an end into a dead end. Returns false (leaving the end
+    // unchanged) if index is out of range, the game is finished, or the
+    // new scores are invalid.
+    bool editEnd(size_t index, int team1Score, int team2Score);
+
     // Marks the game as finished. After this, recordEnd() will fail.
     void finish(uint32_t endTimestamp = 0);
 

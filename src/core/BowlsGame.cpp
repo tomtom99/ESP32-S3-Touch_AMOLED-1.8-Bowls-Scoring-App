@@ -69,6 +69,41 @@ bool BowlsGame::undoLastEnd() {
     return true;
 }
 
+bool BowlsGame::removeEnd(size_t index) {
+    if (finished_ || index >= ends_.size()) {
+        return false;
+    }
+    const EndResult& target = ends_[index];
+    team1_.score -= target.team1Score;
+    team2_.score -= target.team2Score;
+    ends_.erase(ends_.begin() + static_cast<std::vector<EndResult>::difference_type>(index));
+    return true;
+}
+
+bool BowlsGame::editEnd(size_t index, int team1Score, int team2Score) {
+    if (finished_ || index >= ends_.size()) {
+        return false;
+    }
+    if (team1Score < 0 || team2Score < 0) {
+        return false;
+    }
+    // Only one side can win an end; the other side scores zero.
+    if (team1Score > 0 && team2Score > 0) {
+        return false;
+    }
+    const int maxPerEnd = maxScorePerEnd(type_);
+    if (team1Score > maxPerEnd || team2Score > maxPerEnd) {
+        return false;
+    }
+
+    EndResult& target = ends_[index];
+    team1_.score += team1Score - target.team1Score;
+    team2_.score += team2Score - target.team2Score;
+    target.team1Score = team1Score;
+    target.team2Score = team2Score;
+    return true;
+}
+
 void BowlsGame::finish(uint32_t endTimestamp) {
     finished_ = true;
     endTimestamp_ = endTimestamp;

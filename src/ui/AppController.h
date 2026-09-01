@@ -36,6 +36,10 @@ private:
     void refreshEndsTable();
     void updateSliderLabel(int32_t value);
 
+    // Long-press context menu for editing/deleting a single end.
+    void showEndMenu(int endIndex);
+    void closeEndMenu();
+
     // Renders the Scr/Tot cells with the largest available font.
     static void onEndsTableDrawPart(lv_event_t* e);
 
@@ -55,9 +59,14 @@ private:
     static void onSetupStart(lv_event_t* e);
     static void onSliderChanged(lv_event_t* e);
     static void onRecordEnd(lv_event_t* e);
+    static void onRecordSliderPressed(lv_event_t* e);
     static void onRecordSliderReleased(lv_event_t* e);
-    static void onUndoEnd(lv_event_t* e);
-    static void onEndGame(lv_event_t* e);
+    static void onEndGameSliderPressed(lv_event_t* e);
+    static void onEndGameSliderReleased(lv_event_t* e);
+    static void onEndsTableLongPressed(lv_event_t* e);
+    static void onEndMenuEdit(lv_event_t* e);
+    static void onEndMenuDelete(lv_event_t* e);
+    static void onEndMenuCancel(lv_event_t* e);
     static void onBackToMenu(lv_event_t* e);
     static void onHistoryItemClicked(lv_event_t* e);
 
@@ -77,6 +86,20 @@ private:
     // "Slide to record" confirmation control at the bottom of the screen.
     lv_obj_t* recordSlider_ = nullptr;
     lv_obj_t* recordSliderLabel_ = nullptr;
+    int32_t recordSliderPressX_ = 0;
+
+    // "Swipe to end game" control across the top of the scoring screen.
+    lv_obj_t* endGameSlider_ = nullptr;
+    lv_obj_t* endGameSliderLabel_ = nullptr;
+    int32_t endGameSliderPressX_ = 0;
+
+    // Set to a non-negative end index while the record slider is being used
+    // to edit an existing end rather than record a new one.
+    int editingEndIndex_ = -1;
+
+    // Long-press context menu overlay for a specific end (edit/delete).
+    lv_obj_t* endMenuOverlay_ = nullptr;
+    int endMenuIndex_ = -1;
 };
 
 }  // namespace bowls
