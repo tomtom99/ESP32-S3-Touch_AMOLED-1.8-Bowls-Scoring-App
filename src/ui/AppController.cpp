@@ -4,6 +4,48 @@
 
 namespace bowls {
 
+namespace {
+
+constexpr lv_coord_t kButtonWidth = 150;
+constexpr lv_coord_t kButtonHeight = 56;
+constexpr lv_coord_t kMenuButtonWidth = 230;
+constexpr lv_coord_t kScoreButtonWidth = 72;
+constexpr lv_coord_t kScoreButtonHeight = 56;
+constexpr lv_coord_t kTextAreaWidth = 150;
+constexpr lv_coord_t kTextAreaHeight = 48;
+
+void styleScreen(lv_obj_t* obj) {
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_all(obj, 12, 0);
+}
+
+void stylePanel(lv_obj_t* obj) {
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_all(obj, 8, 0);
+    lv_obj_set_style_pad_row(obj, 8, 0);
+    lv_obj_set_style_pad_column(obj, 8, 0);
+}
+
+void styleButton(lv_obj_t* btn, lv_coord_t width = kButtonWidth, lv_coord_t height = kButtonHeight) {
+    lv_obj_set_size(btn, width, height);
+    lv_obj_set_style_radius(btn, 12, 0);
+    lv_obj_set_style_pad_all(btn, 8, 0);
+    lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
+}
+
+void styleTextArea(lv_obj_t* ta) {
+    lv_obj_set_size(ta, kTextAreaWidth, kTextAreaHeight);
+    lv_obj_set_style_text_font(ta, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_pad_hor(ta, 10, 0);
+    lv_obj_set_style_pad_ver(ta, 10, 0);
+}
+
+void styleBodyLabel(lv_obj_t* label) {
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+}
+
+}  // namespace
+
 AppController* AppController::s_instance = nullptr;
 
 AppController::AppController(GameStorage& storage) : storage_(storage) {
@@ -21,6 +63,7 @@ void AppController::begin() {
 
 lv_obj_t* AppController::createScreen() {
     lv_obj_t* screen = lv_obj_create(nullptr);
+    styleScreen(screen);
     lv_scr_load(screen);
     return screen;
 }
@@ -28,13 +71,15 @@ lv_obj_t* AppController::createScreen() {
 lv_obj_t* AppController::addTitle(lv_obj_t* parent, const char* text) {
     lv_obj_t* label = lv_label_create(parent);
     lv_label_set_text(label, text);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     return label;
 }
 
 lv_obj_t* AppController::addButton(lv_obj_t* parent, const char* text, lv_event_cb_t callback) {
     lv_obj_t* btn = lv_btn_create(parent);
-    lv_obj_add_event_cb(btn, callback, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(btn, callback, LV_EVENT_PRESSED, nullptr);
+    styleButton(btn);
     lv_obj_t* label = lv_label_create(btn);
     lv_label_set_text(label, text);
     lv_obj_center(label);
@@ -50,10 +95,12 @@ void AppController::showMenu() {
     addTitle(screen, "Crown Green Bowls");
 
     lv_obj_t* newGameBtn = addButton(screen, "New Game", onMenuNewGame);
-    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, -30);
+    styleButton(newGameBtn, kMenuButtonWidth, 64);
+    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, -42);
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
-    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, 30);
+    styleButton(historyBtn, kMenuButtonWidth, 64);
+    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, 42);
 }
 
 void AppController::onMenuNewGame(lv_event_t*) {
@@ -77,10 +124,12 @@ void AppController::rebuildNameInputs(lv_obj_t* container) {
     for (int i = 0; i < players; ++i) {
         lv_obj_t* ta = lv_textarea_create(container);
         lv_textarea_set_one_line(ta, true);
+        lv_textarea_set_max_length(ta, 20);
         char placeholder[16];
         std::snprintf(placeholder, sizeof(placeholder), "Player %d", i + 1);
         lv_textarea_set_placeholder_text(ta, placeholder);
         lv_obj_add_event_cb(ta, onTextAreaFocused, LV_EVENT_FOCUSED, nullptr);
+        styleTextArea(ta);
         nameInputs_[i] = ta;
     }
 }
@@ -99,38 +148,50 @@ void AppController::showNewGameSetup() {
     addTitle(screen, "New Game");
 
     lv_obj_t* typeRow = lv_obj_create(screen);
-    lv_obj_set_size(typeRow, LV_PCT(90), 50);
-    lv_obj_align(typeRow, LV_ALIGN_TOP_MID, 0, 40);
+    stylePanel(typeRow);
+    lv_obj_set_size(typeRow, LV_PCT(94), 82);
+    lv_obj_align(typeRow, LV_ALIGN_TOP_MID, 0, 56);
     lv_obj_set_flex_flow(typeRow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(typeRow, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t* singlesBtn = lv_btn_create(typeRow);
     lv_obj_add_flag(singlesBtn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_state(singlesBtn, LV_STATE_CHECKED);
     lv_obj_add_event_cb(singlesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_set_user_data(singlesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Singles)));
+    styleButton(singlesBtn, 140, kButtonHeight);
     lv_obj_t* singlesLabel = lv_label_create(singlesBtn);
     lv_label_set_text(singlesLabel, "Singles");
+    lv_obj_center(singlesLabel);
 
     lv_obj_t* doublesBtn = lv_btn_create(typeRow);
     lv_obj_add_flag(doublesBtn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_event_cb(doublesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_set_user_data(doublesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Doubles)));
+    styleButton(doublesBtn, 140, kButtonHeight);
     lv_obj_t* doublesLabel = lv_label_create(doublesBtn);
     lv_label_set_text(doublesLabel, "Doubles");
+    lv_obj_center(doublesLabel);
 
     nameInputsContainer_ = lv_obj_create(screen);
-    lv_obj_set_size(nameInputsContainer_, LV_PCT(90), 140);
-    lv_obj_align(nameInputsContainer_, LV_ALIGN_TOP_MID, 0, 100);
+    stylePanel(nameInputsContainer_);
+    lv_obj_set_size(nameInputsContainer_, LV_PCT(94), 170);
+    lv_obj_align(nameInputsContainer_, LV_ALIGN_TOP_MID, 0, 150);
     lv_obj_set_flex_flow(nameInputsContainer_, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(nameInputsContainer_, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
     rebuildNameInputs(nameInputsContainer_);
 
     keyboard_ = lv_keyboard_create(screen);
     lv_obj_add_flag(keyboard_, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupStart);
+    styleButton(startBtn, 150, kButtonHeight);
     lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
+    styleButton(backBtn, 130, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
 }
 
@@ -192,45 +253,58 @@ void AppController::showScoring() {
     addTitle(screen, "Scoring");
 
     team1ScoreLabel_ = lv_label_create(screen);
-    lv_obj_align(team1ScoreLabel_, LV_ALIGN_TOP_LEFT, 20, 40);
+    styleBodyLabel(team1ScoreLabel_);
+    lv_obj_align(team1ScoreLabel_, LV_ALIGN_TOP_LEFT, 16, 60);
 
     team2ScoreLabel_ = lv_label_create(screen);
-    lv_obj_align(team2ScoreLabel_, LV_ALIGN_TOP_RIGHT, -20, 40);
+    styleBodyLabel(team2ScoreLabel_);
+    lv_obj_align(team2ScoreLabel_, LV_ALIGN_TOP_RIGHT, -16, 60);
 
     endCountLabel_ = lv_label_create(screen);
-    lv_obj_align(endCountLabel_, LV_ALIGN_TOP_MID, 0, 40);
+    styleBodyLabel(endCountLabel_);
+    lv_obj_align(endCountLabel_, LV_ALIGN_TOP_MID, 0, 60);
 
     const BowlsGame& game = *currentGame_;
     const int maxPerEnd = game.maxPerEnd();
 
     lv_obj_t* team1Row = lv_obj_create(screen);
-    lv_obj_set_size(team1Row, LV_PCT(45), 60);
-    lv_obj_align(team1Row, LV_ALIGN_LEFT_MID, 10, 0);
+    stylePanel(team1Row);
+    lv_obj_set_size(team1Row, LV_PCT(92), 84);
+    lv_obj_align(team1Row, LV_ALIGN_TOP_MID, 0, 118);
     lv_obj_set_flex_flow(team1Row, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(team1Row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
     for (int score = 1; score <= maxPerEnd; ++score) {
         char text[4];
         std::snprintf(text, sizeof(text), "%d", score);
         lv_obj_t* btn = addButton(team1Row, text, onScoreButton);
+        styleButton(btn, kScoreButtonWidth, kScoreButtonHeight);
         // Encode (team=1, score) into the button's user data.
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(100 + score)));
     }
 
     lv_obj_t* team2Row = lv_obj_create(screen);
-    lv_obj_set_size(team2Row, LV_PCT(45), 60);
-    lv_obj_align(team2Row, LV_ALIGN_RIGHT_MID, -10, 0);
+    stylePanel(team2Row);
+    lv_obj_set_size(team2Row, LV_PCT(92), 84);
+    lv_obj_align(team2Row, LV_ALIGN_TOP_MID, 0, 222);
     lv_obj_set_flex_flow(team2Row, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(team2Row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
     for (int score = 1; score <= maxPerEnd; ++score) {
         char text[4];
         std::snprintf(text, sizeof(text), "%d", score);
         lv_obj_t* btn = addButton(team2Row, text, onScoreButton);
+        styleButton(btn, kScoreButtonWidth, kScoreButtonHeight);
         // Encode (team=2, score) into the button's user data.
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(200 + score)));
     }
 
     lv_obj_t* undoBtn = addButton(screen, "Undo End", onUndoEnd);
+    styleButton(undoBtn, 150, kButtonHeight);
     lv_obj_align(undoBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
 
     lv_obj_t* endGameBtn = addButton(screen, "End Game", onEndGame);
+    styleButton(endGameBtn, 150, kButtonHeight);
     lv_obj_align(endGameBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     // Refresh labels with current (zero) scores.
@@ -290,8 +364,9 @@ void AppController::showHistoryList() {
     addTitle(screen, "Old Scores");
 
     lv_obj_t* list = lv_list_create(screen);
-    lv_obj_set_size(list, LV_PCT(100), LV_PCT(80));
-    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_size(list, LV_PCT(94), LV_PCT(74));
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_text_font(list, &lv_font_montserrat_20, 0);
 
     for (size_t i = 0; i < history_.count(); ++i) {
         const BowlsGame& game = history_.at(i);
@@ -301,11 +376,14 @@ void AppController::showHistoryList() {
                       game.team2().playerNames.empty() ? "" : game.team2().playerNames[0].c_str(),
                       game.team1().score, game.team2().score);
         lv_obj_t* btn = lv_list_add_btn(list, nullptr, text);
-        lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_CLICKED, nullptr);
+        lv_obj_set_height(btn, 56);
+        lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
+        lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_PRESSED, nullptr);
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
     }
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
+    styleButton(backBtn, 130, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
 }
 
@@ -325,14 +403,18 @@ void AppController::showHistoryDetail(size_t index) {
     addTitle(screen, title);
 
     lv_obj_t* summary = lv_label_create(screen);
+    styleBodyLabel(summary);
+    lv_label_set_long_mode(summary, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(summary, LV_PCT(90));
     char buf[128];
     std::snprintf(buf, sizeof(buf), "Team 1: %d\nTeam 2: %d\nEnds played: %d\n%s",
                   game.team1().score, game.team2().score, game.endCount(),
                   game.resultSummary().c_str());
     lv_label_set_text(summary, buf);
-    lv_obj_align(summary, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_align(summary, LV_ALIGN_TOP_MID, 0, 68);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
+    styleButton(backBtn, 130, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
 }
 

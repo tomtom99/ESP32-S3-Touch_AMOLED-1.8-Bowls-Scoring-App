@@ -15,6 +15,7 @@
 
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
+#include <Wire.h>
 #include <lvgl.h>
 
 #include "config/BoardPins.h"
@@ -36,10 +37,35 @@ bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
 
 // --- LVGL ------------------------------------------------------------------
 constexpr uint32_t kDrawBufLines = 40;
+constexpr uint8_t kIoExpanderAddress = 0x20;
+constexpr uint8_t kIoExpanderOutputRegister = 0x01;
+constexpr uint8_t kIoExpanderConfigRegister = 0x03;
+constexpr uint8_t kBoardEnablePinsMask = (1U << 0) | (1U << 1) | (1U << 2) | (1U << 6);
+constexpr uint8_t kBoardEnablePinsAsOutputs = static_cast<uint8_t>(~kBoardEnablePinsMask);
+
 lv_disp_draw_buf_t g_drawBuf;
 lv_color_t g_buf1[LCD_WIDTH * kDrawBufLines];
 lv_disp_drv_t g_dispDrv;
 lv_indev_drv_t g_indevDrv;
+
+bool writeIoExpanderRegister(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(kIoExpanderAddress);
+    Wire.write(reg);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+}
+
+bool initializeBoardPeripherals() {
+    if (!writeIoExpanderRegister(kIoExpanderOutputRegister, 0x00)) {
+        return false;
+    }
+    if (!writeIoExpanderRegister(kIoExpanderConfigRegister, kBoardEnablePinsAsOutputs)) {
+        return false;
+    }
+
+    delay(20);
+    return writeIoExpanderRegister(kIoExpanderOutputRegister, kBoardEnablePinsMask);
+}
 
 void lvglFlushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* colorP) {
     const uint32_t w = area->x2 - area->x1 + 1;
@@ -50,14 +76,20 @@ void lvglFlushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* co
 
 void lvglTouchReadCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     (void)drv;
+    static int16_t lastX = 0;
+    static int16_t lastY = 0;
     int16_t x = 0;
     int16_t y = 0;
     if (g_touch.read(x, y)) {
+        lastX = x;
+        lastY = y;
         data->state = LV_INDEV_STATE_PRESSED;
         data->point.x = x;
         data->point.y = y;
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
+        data->point.x = lastX;
+        data->point.y = lastY;
     }
 }
 
@@ -69,6 +101,12 @@ bowls::AppController* g_app = nullptr;
 
 void setup() {
     Serial.begin(115200);
+
+    Wire.begin(TOUCH_IIC_SDA, TOUCH_IIC_SCL);
+    Wire.setClock(400000);
+    if (!initializeBoardPeripherals()) {
+        Serial.println("Board warning: failed to initialize the I/O expander.");
+    }
 
     g_gfx->begin();
     g_gfx->fillScreen(BLACK);
