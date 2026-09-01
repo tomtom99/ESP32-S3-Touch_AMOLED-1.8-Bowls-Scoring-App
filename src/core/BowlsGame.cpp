@@ -47,6 +47,17 @@ bool BowlsGame::recordEnd(int team1Score, int team2Score) {
     return true;
 }
 
+bool BowlsGame::recordDeadEnd() {
+    if (finished_) {
+        return false;
+    }
+    EndResult endResult;
+    endResult.team1Score = 0;
+    endResult.team2Score = 0;
+    ends_.push_back(endResult);
+    return true;
+}
+
 bool BowlsGame::undoLastEnd() {
     if (finished_ || ends_.empty()) {
         return false;

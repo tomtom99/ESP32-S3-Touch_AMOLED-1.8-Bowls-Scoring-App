@@ -28,12 +28,15 @@
 #define LV_USE_TEXTAREA 1
 #define LV_USE_KEYBOARD 1
 #define LV_USE_LIST 1
+#define LV_USE_TABLE 1
+#define LV_USE_SLIDER 1
 #define LV_USE_FLEX 1
 
 /* Built-in default font used for labels/buttons. */
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_20 1
 #define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_36 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_20
 
 /* Enable logging over Serial to help diagnose display/touch issues. */

@@ -29,18 +29,18 @@ private:
     void showHistoryDetail(size_t index);
 
     // --- Actions -----------------------------------------------------------
-    void startNewGame(GameType type, const std::vector<std::string>& team1Names,
-                       const std::vector<std::string>& team2Names);
+    void startNewGame(GameType type);
     void recordEnd(int team1Score, int team2Score);
+    void recordDeadEnd();
     void endCurrentGame();
-    void refreshScoreLabels();
+    void refreshEndsTable();
+    void updateSliderLabel(int32_t value);
 
     // --- Helpers -------------------------------------------------------
     static lv_obj_t* createScreen();
     static lv_obj_t* addTitle(lv_obj_t* parent, const char* text);
     static lv_obj_t* addButton(lv_obj_t* parent, const char* text,
                                 lv_event_cb_t callback);
-    void rebuildNameInputs(lv_obj_t* container);
 
     // --- Event trampolines (LVGL callbacks are plain C function pointers).
     // The app only ever has a single AppController instance (s_instance),
@@ -50,12 +50,12 @@ private:
     static void onMenuHistory(lv_event_t* e);
     static void onSetupTypeChanged(lv_event_t* e);
     static void onSetupStart(lv_event_t* e);
-    static void onScoreButton(lv_event_t* e);
+    static void onSliderChanged(lv_event_t* e);
+    static void onRecordEnd(lv_event_t* e);
     static void onUndoEnd(lv_event_t* e);
     static void onEndGame(lv_event_t* e);
     static void onBackToMenu(lv_event_t* e);
     static void onHistoryItemClicked(lv_event_t* e);
-    static void onTextAreaFocused(lv_event_t* e);
 
     static AppController* s_instance;
 
@@ -64,16 +64,11 @@ private:
     std::unique_ptr<BowlsGame> currentGame_;
     GameType pendingType_ = GameType::Singles;
 
-    // Text areas for entering player names on the setup screen.
-    lv_obj_t* nameInputs_[4] = {nullptr, nullptr, nullptr, nullptr};
-    lv_obj_t* nameInputsContainer_ = nullptr;
-    lv_obj_t* keyboard_ = nullptr;
-
-    // Labels on the scoring screen that need to be refreshed after
-    // recording/undoing an end.
-    lv_obj_t* team1ScoreLabel_ = nullptr;
-    lv_obj_t* team2ScoreLabel_ = nullptr;
-    lv_obj_t* endCountLabel_ = nullptr;
+    // Ends table + input slider on the scoring screen.
+    lv_obj_t* endsTableContainer_ = nullptr;
+    lv_obj_t* endsTable_ = nullptr;
+    lv_obj_t* slider_ = nullptr;
+    lv_obj_t* sliderLabel_ = nullptr;
 };
 
 }  // namespace bowls

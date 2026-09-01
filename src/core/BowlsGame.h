@@ -63,6 +63,11 @@ public:
     // game has already been finished.
     bool recordEnd(int team1Score, int team2Score);
 
+    // Records a "dead end" (jack knocked out, end replayed) - no score for
+    // either side, but it still shows up in the ends table. Returns false
+    // if the game has already been finished.
+    bool recordDeadEnd();
+
     // Removes the most recently recorded end, undoing its score. Returns
     // false if there are no ends to undo or the game is finished.
     bool undoLastEnd();

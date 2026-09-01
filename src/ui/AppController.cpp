@@ -9,10 +9,14 @@ namespace {
 constexpr lv_coord_t kButtonWidth = 150;
 constexpr lv_coord_t kButtonHeight = 56;
 constexpr lv_coord_t kMenuButtonWidth = 230;
-constexpr lv_coord_t kScoreButtonWidth = 72;
-constexpr lv_coord_t kScoreButtonHeight = 56;
-constexpr lv_coord_t kTextAreaWidth = 150;
-constexpr lv_coord_t kTextAreaHeight = 48;
+constexpr lv_coord_t kSmallButtonWidth = 96;
+constexpr lv_coord_t kSmallButtonHeight = 40;
+
+// Slider positions, left (0) to right (4). The value chosen determines
+// which side scores and by how much for the end just played.
+constexpr int32_t kSliderMin = 0;
+constexpr int32_t kSliderMax = 4;
+constexpr int32_t kSliderDeadEnd = 2;
 
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
@@ -33,15 +37,27 @@ void styleButton(lv_obj_t* btn, lv_coord_t width = kButtonWidth, lv_coord_t heig
     lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
 }
 
-void styleTextArea(lv_obj_t* ta) {
-    lv_obj_set_size(ta, kTextAreaWidth, kTextAreaHeight);
-    lv_obj_set_style_text_font(ta, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_pad_hor(ta, 10, 0);
-    lv_obj_set_style_pad_ver(ta, 10, 0);
-}
-
 void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+}
+
+// Returns the display text for a given slider position.
+const char* sliderValueText(int32_t value) {
+    switch (value) {
+        case 0: return "2 DOWN";
+        case 1: return "1 DOWN";
+        case 2: return "DEAD END";
+        case 3: return "1 UP";
+        case 4: return "2 UP";
+        default: return "";
+    }
+}
+
+// Colour-codes the slider label so the direction is obvious at a glance.
+lv_color_t sliderValueColor(int32_t value) {
+    if (value > kSliderDeadEnd) return lv_palette_main(LV_PALETTE_GREEN);
+    if (value < kSliderDeadEnd) return lv_palette_main(LV_PALETTE_RED);
+    return lv_palette_main(LV_PALETTE_GREY);
 }
 
 }  // namespace
@@ -115,42 +131,20 @@ void AppController::onMenuHistory(lv_event_t*) {
 // New game setup
 // ---------------------------------------------------------------------------
 
-void AppController::rebuildNameInputs(lv_obj_t* container) {
-    lv_obj_clean(container);
-    const int players = playersPerSide(pendingType_) * 2;  // both teams
-    for (int i = 0; i < 4; ++i) {
-        nameInputs_[i] = nullptr;
-    }
-    for (int i = 0; i < players; ++i) {
-        lv_obj_t* ta = lv_textarea_create(container);
-        lv_textarea_set_one_line(ta, true);
-        lv_textarea_set_max_length(ta, 20);
-        char placeholder[16];
-        std::snprintf(placeholder, sizeof(placeholder), "Player %d", i + 1);
-        lv_textarea_set_placeholder_text(ta, placeholder);
-        lv_obj_add_event_cb(ta, onTextAreaFocused, LV_EVENT_FOCUSED, nullptr);
-        styleTextArea(ta);
-        nameInputs_[i] = ta;
-    }
-}
-
-void AppController::onTextAreaFocused(lv_event_t* e) {
-    lv_obj_t* ta = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    if (s_instance->keyboard_ != nullptr) {
-        lv_keyboard_set_textarea(s_instance->keyboard_, ta);
-        lv_obj_clear_flag(s_instance->keyboard_, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
 void AppController::showNewGameSetup() {
     pendingType_ = GameType::Singles;
     lv_obj_t* screen = createScreen();
     addTitle(screen, "New Game");
 
+    lv_obj_t* subtitle = lv_label_create(screen);
+    lv_label_set_text(subtitle, "Home vs Away");
+    lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_20, 0);
+    lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
+
     lv_obj_t* typeRow = lv_obj_create(screen);
     stylePanel(typeRow);
     lv_obj_set_size(typeRow, LV_PCT(94), 82);
-    lv_obj_align(typeRow, LV_ALIGN_TOP_MID, 0, 56);
+    lv_obj_align(typeRow, LV_ALIGN_CENTER, 0, -20);
     lv_obj_set_flex_flow(typeRow, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(typeRow, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -173,18 +167,6 @@ void AppController::showNewGameSetup() {
     lv_obj_t* doublesLabel = lv_label_create(doublesBtn);
     lv_label_set_text(doublesLabel, "Doubles");
     lv_obj_center(doublesLabel);
-
-    nameInputsContainer_ = lv_obj_create(screen);
-    stylePanel(nameInputsContainer_);
-    lv_obj_set_size(nameInputsContainer_, LV_PCT(94), 170);
-    lv_obj_align(nameInputsContainer_, LV_ALIGN_TOP_MID, 0, 150);
-    lv_obj_set_flex_flow(nameInputsContainer_, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_flex_align(nameInputsContainer_, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    rebuildNameInputs(nameInputsContainer_);
-
-    keyboard_ = lv_keyboard_create(screen);
-    lv_obj_add_flag(keyboard_, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupStart);
     styleButton(startBtn, 150, kButtonHeight);
@@ -212,35 +194,15 @@ void AppController::onSetupTypeChanged(lv_event_t* e) {
     lv_obj_add_state(btn, LV_STATE_CHECKED);
 
     s_instance->pendingType_ = type;
-    s_instance->rebuildNameInputs(s_instance->nameInputsContainer_);
 }
 
 void AppController::onSetupStart(lv_event_t*) {
-    AppController* self = s_instance;
-    const int playersPerTeam = playersPerSide(self->pendingType_);
-
-    std::vector<std::string> team1Names;
-    std::vector<std::string> team2Names;
-    for (int i = 0; i < playersPerTeam; ++i) {
-        const char* text = lv_textarea_get_text(self->nameInputs_[i]);
-        char fallback[16];
-        std::snprintf(fallback, sizeof(fallback), "Player %d", i + 1);
-        team1Names.push_back((text != nullptr && text[0] != '\0') ? text : fallback);
-    }
-    for (int i = 0; i < playersPerTeam; ++i) {
-        const char* text = lv_textarea_get_text(self->nameInputs_[playersPerTeam + i]);
-        char fallback[16];
-        std::snprintf(fallback, sizeof(fallback), "Player %d", playersPerTeam + i + 1);
-        team2Names.push_back((text != nullptr && text[0] != '\0') ? text : fallback);
-    }
-
-    self->startNewGame(self->pendingType_, team1Names, team2Names);
+    s_instance->startNewGame(s_instance->pendingType_);
 }
 
-void AppController::startNewGame(GameType type, const std::vector<std::string>& team1Names,
-                                  const std::vector<std::string>& team2Names) {
+void AppController::startNewGame(GameType type) {
     currentGame_ = std::unique_ptr<BowlsGame>(new BowlsGame(
-        type, team1Names, team2Names, static_cast<uint32_t>(lv_tick_get() / 1000)));
+        type, {"Home"}, {"Away"}, static_cast<uint32_t>(lv_tick_get() / 1000)));
     showScoring();
 }
 
@@ -250,97 +212,138 @@ void AppController::startNewGame(GameType type, const std::vector<std::string>& 
 
 void AppController::showScoring() {
     lv_obj_t* screen = createScreen();
-    addTitle(screen, "Scoring");
 
-    team1ScoreLabel_ = lv_label_create(screen);
-    styleBodyLabel(team1ScoreLabel_);
-    lv_obj_align(team1ScoreLabel_, LV_ALIGN_TOP_LEFT, 16, 60);
+    // Small top bar: Undo (left) and End Game (right), keeping the rest of
+    // the tiny 1.8" screen for the ends table and the scoring slider.
+    lv_obj_t* undoBtn = addButton(screen, "Undo", onUndoEnd);
+    styleButton(undoBtn, kSmallButtonWidth, kSmallButtonHeight);
+    lv_obj_align(undoBtn, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    team2ScoreLabel_ = lv_label_create(screen);
-    styleBodyLabel(team2ScoreLabel_);
-    lv_obj_align(team2ScoreLabel_, LV_ALIGN_TOP_RIGHT, -16, 60);
+    lv_obj_t* endGameBtn = addButton(screen, "End", onEndGame);
+    styleButton(endGameBtn, kSmallButtonWidth, kSmallButtonHeight);
+    lv_obj_align(endGameBtn, LV_ALIGN_TOP_RIGHT, 0, 0);
 
-    endCountLabel_ = lv_label_create(screen);
-    styleBodyLabel(endCountLabel_);
-    lv_obj_align(endCountLabel_, LV_ALIGN_TOP_MID, 0, 60);
+    // Scrollable table of every end played so far, plus running totals.
+    // Columns: Home score | Home total | End # | Away score | Away total.
+    endsTableContainer_ = lv_obj_create(screen);
+    lv_obj_set_style_pad_all(endsTableContainer_, 0, 0);
+    lv_obj_set_scroll_dir(endsTableContainer_, LV_DIR_VER);
+    lv_obj_set_size(endsTableContainer_, LV_PCT(100), 210);
+    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 48);
 
-    const BowlsGame& game = *currentGame_;
-    const int maxPerEnd = game.maxPerEnd();
+    endsTable_ = lv_table_create(endsTableContainer_);
+    lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_table_set_col_cnt(endsTable_, 5);
+    lv_table_set_col_width(endsTable_, 0, 66);
+    lv_table_set_col_width(endsTable_, 1, 78);
+    lv_table_set_col_width(endsTable_, 2, 52);
+    lv_table_set_col_width(endsTable_, 3, 66);
+    lv_table_set_col_width(endsTable_, 4, 78);
 
-    lv_obj_t* team1Row = lv_obj_create(screen);
-    stylePanel(team1Row);
-    lv_obj_set_size(team1Row, LV_PCT(92), 84);
-    lv_obj_align(team1Row, LV_ALIGN_TOP_MID, 0, 118);
-    lv_obj_set_flex_flow(team1Row, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_flex_align(team1Row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    for (int score = 1; score <= maxPerEnd; ++score) {
-        char text[4];
-        std::snprintf(text, sizeof(text), "%d", score);
-        lv_obj_t* btn = addButton(team1Row, text, onScoreButton);
-        styleButton(btn, kScoreButtonWidth, kScoreButtonHeight);
-        // Encode (team=1, score) into the button's user data.
-        lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(100 + score)));
-    }
+    // Big, ever-visible slider for choosing the outcome of the current end.
+    sliderLabel_ = lv_label_create(screen);
+    lv_obj_set_style_text_font(sliderLabel_, &lv_font_montserrat_36, 0);
+    lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 268);
 
-    lv_obj_t* team2Row = lv_obj_create(screen);
-    stylePanel(team2Row);
-    lv_obj_set_size(team2Row, LV_PCT(92), 84);
-    lv_obj_align(team2Row, LV_ALIGN_TOP_MID, 0, 222);
-    lv_obj_set_flex_flow(team2Row, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_flex_align(team2Row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    for (int score = 1; score <= maxPerEnd; ++score) {
-        char text[4];
-        std::snprintf(text, sizeof(text), "%d", score);
-        lv_obj_t* btn = addButton(team2Row, text, onScoreButton);
-        styleButton(btn, kScoreButtonWidth, kScoreButtonHeight);
-        // Encode (team=2, score) into the button's user data.
-        lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(200 + score)));
-    }
+    slider_ = lv_slider_create(screen);
+    lv_slider_set_range(slider_, kSliderMin, kSliderMax);
+    lv_slider_set_value(slider_, kSliderDeadEnd, LV_ANIM_OFF);
+    lv_obj_set_size(slider_, LV_PCT(92), 40);
+    lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 320);
+    lv_obj_add_event_cb(slider_, onSliderChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
-    lv_obj_t* undoBtn = addButton(screen, "Undo End", onUndoEnd);
-    styleButton(undoBtn, 150, kButtonHeight);
-    lv_obj_align(undoBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+    lv_obj_t* recordBtn = addButton(screen, "RECORD END", onRecordEnd);
+    styleButton(recordBtn, LV_PCT(92), 64);
+    lv_obj_align(recordBtn, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_t* recordLabel = lv_obj_get_child(recordBtn, 0);
+    lv_obj_set_style_text_font(recordLabel, &lv_font_montserrat_28, 0);
 
-    lv_obj_t* endGameBtn = addButton(screen, "End Game", onEndGame);
-    styleButton(endGameBtn, 150, kButtonHeight);
-    lv_obj_align(endGameBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
-
-    // Refresh labels with current (zero) scores.
-    refreshScoreLabels();
+    updateSliderLabel(kSliderDeadEnd);
+    refreshEndsTable();
 }
 
-void AppController::onScoreButton(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    const intptr_t encoded = reinterpret_cast<intptr_t>(lv_obj_get_user_data(btn));
-    const int team = static_cast<int>(encoded / 100);
-    const int score = static_cast<int>(encoded % 100);
-    if (team == 1) {
-        s_instance->recordEnd(score, 0);
-    } else {
-        s_instance->recordEnd(0, score);
+void AppController::updateSliderLabel(int32_t value) {
+    lv_label_set_text(sliderLabel_, sliderValueText(value));
+    lv_obj_set_style_text_color(sliderLabel_, sliderValueColor(value), 0);
+}
+
+void AppController::onSliderChanged(lv_event_t* e) {
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    s_instance->updateSliderLabel(lv_slider_get_value(slider));
+}
+
+void AppController::onRecordEnd(lv_event_t*) {
+    const int32_t value = lv_slider_get_value(s_instance->slider_);
+    switch (value) {
+        case 0: s_instance->recordEnd(0, 2); break;
+        case 1: s_instance->recordEnd(0, 1); break;
+        case 2: s_instance->recordDeadEnd(); break;
+        case 3: s_instance->recordEnd(1, 0); break;
+        case 4: s_instance->recordEnd(2, 0); break;
+        default: break;
     }
+    lv_slider_set_value(s_instance->slider_, kSliderDeadEnd, LV_ANIM_OFF);
+    s_instance->updateSliderLabel(kSliderDeadEnd);
 }
 
 void AppController::recordEnd(int team1Score, int team2Score) {
     currentGame_->recordEnd(team1Score, team2Score);
-    refreshScoreLabels();
+    refreshEndsTable();
 }
 
-void AppController::refreshScoreLabels() {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "Team 1: %d", currentGame_->team1().score);
-    lv_label_set_text(team1ScoreLabel_, buf);
-    std::snprintf(buf, sizeof(buf), "Team 2: %d", currentGame_->team2().score);
-    lv_label_set_text(team2ScoreLabel_, buf);
-    std::snprintf(buf, sizeof(buf), "End %d", currentGame_->endCount());
-    lv_label_set_text(endCountLabel_, buf);
+void AppController::recordDeadEnd() {
+    currentGame_->recordDeadEnd();
+    refreshEndsTable();
+}
+
+void AppController::refreshEndsTable() {
+    const BowlsGame& game = *currentGame_;
+    const auto& ends = game.ends();
+
+    lv_table_set_row_cnt(endsTable_, static_cast<uint16_t>(ends.size() + 1));
+    lv_table_set_cell_value(endsTable_, 0, 0, "Scr");
+    lv_table_set_cell_value(endsTable_, 0, 1, "Tot");
+    lv_table_set_cell_value(endsTable_, 0, 2, "End");
+    lv_table_set_cell_value(endsTable_, 0, 3, "Scr");
+    lv_table_set_cell_value(endsTable_, 0, 4, "Tot");
+
+    int homeTotal = 0;
+    int awayTotal = 0;
+    char buf[8];
+    for (size_t i = 0; i < ends.size(); ++i) {
+        const EndResult& end = ends[i];
+        homeTotal += end.team1Score;
+        awayTotal += end.team2Score;
+        const uint16_t row = static_cast<uint16_t>(i + 1);
+
+        if (end.team1Score == 0 && end.team2Score == 0) {
+            lv_table_set_cell_value(endsTable_, row, 0, "-");
+            lv_table_set_cell_value(endsTable_, row, 3, "-");
+        } else if (end.team1Score > 0) {
+            std::snprintf(buf, sizeof(buf), "%d", end.team1Score);
+            lv_table_set_cell_value(endsTable_, row, 0, buf);
+            lv_table_set_cell_value(endsTable_, row, 3, "-");
+        } else {
+            lv_table_set_cell_value(endsTable_, row, 0, "-");
+            std::snprintf(buf, sizeof(buf), "%d", end.team2Score);
+            lv_table_set_cell_value(endsTable_, row, 3, buf);
+        }
+
+        std::snprintf(buf, sizeof(buf), "%d", homeTotal);
+        lv_table_set_cell_value(endsTable_, row, 1, buf);
+        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(row));
+        lv_table_set_cell_value(endsTable_, row, 2, buf);
+        std::snprintf(buf, sizeof(buf), "%d", awayTotal);
+        lv_table_set_cell_value(endsTable_, row, 4, buf);
+    }
+
+    lv_obj_update_layout(endsTable_);
+    lv_obj_scroll_to_y(endsTableContainer_, LV_COORD_MAX, LV_ANIM_OFF);
 }
 
 void AppController::onUndoEnd(lv_event_t*) {
     s_instance->currentGame_->undoLastEnd();
-    s_instance->refreshScoreLabels();
+    s_instance->refreshEndsTable();
 }
 
 void AppController::onEndGame(lv_event_t*) {
@@ -407,7 +410,7 @@ void AppController::showHistoryDetail(size_t index) {
     lv_label_set_long_mode(summary, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(summary, LV_PCT(90));
     char buf[128];
-    std::snprintf(buf, sizeof(buf), "Team 1: %d\nTeam 2: %d\nEnds played: %d\n%s",
+    std::snprintf(buf, sizeof(buf), "Home: %d\nAway: %d\nEnds played: %d\n%s",
                   game.team1().score, game.team2().score, game.endCount(),
                   game.resultSummary().c_str());
     lv_label_set_text(summary, buf);
