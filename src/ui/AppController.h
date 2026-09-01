@@ -36,6 +36,9 @@ private:
     void refreshEndsTable();
     void updateSliderLabel(int32_t value);
 
+    // Renders the Scr/Tot cells with the largest available font.
+    static void onEndsTableDrawPart(lv_event_t* e);
+
     // --- Helpers -------------------------------------------------------
     static lv_obj_t* createScreen();
     static lv_obj_t* addTitle(lv_obj_t* parent, const char* text);
@@ -52,6 +55,7 @@ private:
     static void onSetupStart(lv_event_t* e);
     static void onSliderChanged(lv_event_t* e);
     static void onRecordEnd(lv_event_t* e);
+    static void onRecordSliderReleased(lv_event_t* e);
     static void onUndoEnd(lv_event_t* e);
     static void onEndGame(lv_event_t* e);
     static void onBackToMenu(lv_event_t* e);
@@ -69,6 +73,10 @@ private:
     lv_obj_t* endsTable_ = nullptr;
     lv_obj_t* slider_ = nullptr;
     lv_obj_t* sliderLabel_ = nullptr;
+
+    // "Slide to record" confirmation control at the bottom of the screen.
+    lv_obj_t* recordSlider_ = nullptr;
+    lv_obj_t* recordSliderLabel_ = nullptr;
 };
 
 }  // namespace bowls

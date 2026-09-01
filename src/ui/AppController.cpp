@@ -18,6 +18,11 @@ constexpr int32_t kSliderMin = 0;
 constexpr int32_t kSliderMax = 4;
 constexpr int32_t kSliderDeadEnd = 2;
 
+// "Slide to record" control: dragging the knob past this fraction of the
+// track confirms the action; releasing early snaps the knob back to zero.
+constexpr int32_t kRecordSliderMax = 100;
+constexpr int32_t kRecordThreshold = 85;
+
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(obj, 12, 0);
@@ -234,29 +239,44 @@ void AppController::showScoring() {
     endsTable_ = lv_table_create(endsTableContainer_);
     lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
     lv_table_set_col_cnt(endsTable_, 5);
-    lv_table_set_col_width(endsTable_, 0, 66);
-    lv_table_set_col_width(endsTable_, 1, 78);
-    lv_table_set_col_width(endsTable_, 2, 52);
-    lv_table_set_col_width(endsTable_, 3, 66);
-    lv_table_set_col_width(endsTable_, 4, 78);
+    lv_table_set_col_width(endsTable_, 0, 70);
+    lv_table_set_col_width(endsTable_, 1, 86);
+    lv_table_set_col_width(endsTable_, 2, 28);
+    lv_table_set_col_width(endsTable_, 3, 70);
+    lv_table_set_col_width(endsTable_, 4, 86);
+    lv_obj_add_event_cb(endsTable_, onEndsTableDrawPart, LV_EVENT_DRAW_PART_BEGIN, nullptr);
 
     // Big, ever-visible slider for choosing the outcome of the current end.
-    sliderLabel_ = lv_label_create(screen);
-    lv_obj_set_style_text_font(sliderLabel_, &lv_font_montserrat_36, 0);
-    lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 268);
-
     slider_ = lv_slider_create(screen);
     lv_slider_set_range(slider_, kSliderMin, kSliderMax);
     lv_slider_set_value(slider_, kSliderDeadEnd, LV_ANIM_OFF);
     lv_obj_set_size(slider_, LV_PCT(92), 40);
-    lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 320);
+    lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 268);
+
+    sliderLabel_ = lv_label_create(screen);
+    lv_obj_set_style_text_font(sliderLabel_, &lv_font_montserrat_32, 0);
+    lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 320);
     lv_obj_add_event_cb(slider_, onSliderChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
-    lv_obj_t* recordBtn = addButton(screen, "RECORD END", onRecordEnd);
-    styleButton(recordBtn, LV_PCT(92), 64);
-    lv_obj_align(recordBtn, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_t* recordLabel = lv_obj_get_child(recordBtn, 0);
-    lv_obj_set_style_text_font(recordLabel, &lv_font_montserrat_28, 0);
+    recordSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(recordSlider_, 0, kRecordSliderMax);
+    lv_slider_set_value(recordSlider_, 0, LV_ANIM_OFF);
+    lv_obj_set_size(recordSlider_, LV_PCT(92), 64);
+    lv_obj_align(recordSlider_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_radius(recordSlider_, 32, 0);
+    lv_obj_set_style_bg_color(recordSlider_, lv_palette_darken(LV_PALETTE_GREY, 3), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(recordSlider_, lv_palette_main(LV_PALETTE_GREEN), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(recordSlider_, 32, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(recordSlider_, lv_color_white(), LV_PART_KNOB);
+    lv_obj_set_style_radius(recordSlider_, 28, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(recordSlider_, 4, LV_PART_KNOB);
+    lv_obj_add_event_cb(recordSlider_, onRecordSliderReleased, LV_EVENT_RELEASED, nullptr);
+
+    recordSliderLabel_ = lv_label_create(recordSlider_);
+    lv_label_set_text(recordSliderLabel_, "Slide to Record End");
+    lv_obj_set_style_text_font(recordSliderLabel_, &lv_font_montserrat_20, 0);
+    lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_center(recordSliderLabel_);
 
     updateSliderLabel(kSliderDeadEnd);
     refreshEndsTable();
@@ -286,6 +306,14 @@ void AppController::onRecordEnd(lv_event_t*) {
     s_instance->updateSliderLabel(kSliderDeadEnd);
 }
 
+void AppController::onRecordSliderReleased(lv_event_t* e) {
+    lv_obj_t* recordSlider = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    if (lv_slider_get_value(recordSlider) >= kRecordThreshold) {
+        onRecordEnd(nullptr);
+    }
+    lv_slider_set_value(recordSlider, 0, LV_ANIM_ON);
+}
+
 void AppController::recordEnd(int team1Score, int team2Score) {
     currentGame_->recordEnd(team1Score, team2Score);
     refreshEndsTable();
@@ -303,7 +331,7 @@ void AppController::refreshEndsTable() {
     lv_table_set_row_cnt(endsTable_, static_cast<uint16_t>(ends.size() + 1));
     lv_table_set_cell_value(endsTable_, 0, 0, "Scr");
     lv_table_set_cell_value(endsTable_, 0, 1, "Tot");
-    lv_table_set_cell_value(endsTable_, 0, 2, "End");
+    lv_table_set_cell_value(endsTable_, 0, 2, "#");
     lv_table_set_cell_value(endsTable_, 0, 3, "Scr");
     lv_table_set_cell_value(endsTable_, 0, 4, "Tot");
 
@@ -339,6 +367,24 @@ void AppController::refreshEndsTable() {
 
     lv_obj_update_layout(endsTable_);
     lv_obj_scroll_to_y(endsTableContainer_, LV_COORD_MAX, LV_ANIM_OFF);
+}
+
+void AppController::onEndsTableDrawPart(lv_event_t* e) {
+    lv_obj_draw_part_dsc_t* dsc = lv_event_get_draw_part_dsc(e);
+    if (dsc->part != LV_PART_ITEMS || dsc->label_dsc == nullptr) return;
+
+    // Table cell "id" encodes row * col_cnt + col; decode both from it.
+    lv_obj_t* table = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    const uint16_t colCnt = lv_table_get_col_cnt(table);
+    const uint32_t row = dsc->id / colCnt;
+    const uint32_t col = dsc->id % colCnt;
+
+    // Score/total columns (0, 1, 3, 4) get the largest available font; the
+    // header row and the small end-number column stay at the default size.
+    const bool scoreColumn = (col == 0 || col == 1 || col == 3 || col == 4);
+    if (scoreColumn && row != 0) {
+        dsc->label_dsc->font = &lv_font_montserrat_32;
+    }
 }
 
 void AppController::onUndoEnd(lv_event_t*) {
