@@ -146,24 +146,29 @@ lv_obj_t* AppController::addButton(lv_obj_t* parent, const char* text, lv_event_
 
 void AppController::showMenu() {
     lv_obj_t* screen = createScreen();
-    addTitle(screen, "Crown Green Bowls");
+    lv_obj_t* title = addTitle(screen, "Crown Green Bowls");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_36, 0);
 
     lv_obj_t* newGameBtn = addButton(screen, "New Game", onMenuNewGame);
     styleButton(newGameBtn, kMenuButtonWidth, 70);
+    lv_obj_set_style_text_font(newGameBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? -74 : -44);
 
     if (hasInProgressGame_) {
         lv_obj_t* continueBtn = addButton(screen, "Continue Game", onMenuContinue);
         styleButton(continueBtn, kMenuButtonWidth, 70);
+        lv_obj_set_style_text_font(continueBtn, &lv_font_montserrat_28, 0);
         lv_obj_align(continueBtn, LV_ALIGN_CENTER, 0, 4);
     }
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
     styleButton(historyBtn, kMenuButtonWidth, 70);
+    lv_obj_set_style_text_font(historyBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
 
     lv_obj_t* settingsBtn = addButton(screen, "Settings", onMenuSettings);
     styleButton(settingsBtn, kMenuButtonWidth, 70);
+    lv_obj_set_style_text_font(settingsBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(settingsBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 160 : 122);
 }
 
@@ -340,6 +345,8 @@ void AppController::showScoring() {
     // Long-pressing a row opens a menu to edit or delete that end.
     endsTableContainer_ = lv_obj_create(screen);
     lv_obj_set_style_pad_all(endsTableContainer_, 0, 0);
+    // Bottom padding gives scroll-to-bottom room so the last row clears fully.
+    lv_obj_set_style_pad_bottom(endsTableContainer_, 8, 0);
     lv_obj_set_scroll_dir(endsTableContainer_, LV_DIR_VER);
     lv_obj_set_size(endsTableContainer_, LV_PCT(100), 250);
     lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 0);
