@@ -25,6 +25,7 @@ int maxScorePerEnd(GameType type);
 struct Team {
     std::vector<std::string> playerNames;
     int score = 0;
+    int handicap = 0;
 };
 
 // The result recorded for one end of play. Only one side can win an end in
@@ -44,12 +45,17 @@ public:
     BowlsGame(GameType type,
               std::vector<std::string> team1Names,
               std::vector<std::string> team2Names,
-              uint32_t startTimestamp = 0);
+              uint32_t startTimestamp = 0,
+              int winningScore = 21,
+              int team1Handicap = 0,
+              int team2Handicap = 0);
 
     GameType type() const { return type_; }
     const Team& team1() const { return team1_; }
     const Team& team2() const { return team2_; }
     int maxPerEnd() const { return maxScorePerEnd(type_); }
+    int winningScore() const { return winningScore_; }
+    bool hasReachedWinningScore() const;
     int endCount() const { return static_cast<int>(ends_.size()); }
     const std::vector<EndResult>& ends() const { return ends_; }
     uint32_t startTimestamp() const { return startTimestamp_; }
@@ -99,6 +105,7 @@ private:
     std::vector<EndResult> ends_;
     uint32_t startTimestamp_ = 0;
     uint32_t endTimestamp_ = 0;
+    int winningScore_ = 21;
     bool finished_ = false;
 };
 

@@ -24,17 +24,20 @@ private:
     // --- Screen builders -------------------------------------------------
     void showMenu();
     void showNewGameSetup();
+    void showWinningScoreSetup();
+    void showHandicapSetup();
     void showScoring();
     void showHistoryList();
     void showHistoryDetail(size_t index);
 
     // --- Actions -----------------------------------------------------------
-    void startNewGame(GameType type);
+    void startNewGame();
     void recordEnd(int team1Score, int team2Score);
     void recordDeadEnd();
     void endCurrentGame();
     void refreshEndsTable();
     void updateSliderLabel(int32_t value);
+    void activateEndGameSlider();
 
     // Long-press context menu for editing/deleting a single end.
     void showEndMenu(int endIndex);
@@ -54,9 +57,12 @@ private:
     // so callbacks dispatch to it directly instead of threading `this`
     // through every LVGL user-data slot.
     static void onMenuNewGame(lv_event_t* e);
+    static void onMenuContinue(lv_event_t* e);
     static void onMenuHistory(lv_event_t* e);
     static void onSetupTypeChanged(lv_event_t* e);
-    static void onSetupStart(lv_event_t* e);
+    static void onSetupWinningScoreChanged(lv_event_t* e);
+    static void onSetupHandicapChanged(lv_event_t* e);
+    static void onSetupNext(lv_event_t* e);
     static void onSliderChanged(lv_event_t* e);
     static void onRecordEnd(lv_event_t* e);
     static void onRecordSliderPressed(lv_event_t* e);
@@ -76,6 +82,20 @@ private:
     GameHistory history_;
     std::unique_ptr<BowlsGame> currentGame_;
     GameType pendingType_ = GameType::Singles;
+    int pendingWinningScore_ = 11;
+    int pendingHomeHandicap_ = 0;
+    int pendingAwayHandicap_ = 0;
+    bool hasInProgressGame_ = false;
+    bool awaitingEndConfirmation_ = false;
+
+    lv_obj_t* setupTypeSlider_ = nullptr;
+    lv_obj_t* setupWinningScoreSlider_ = nullptr;
+    lv_obj_t* setupHomeHandicapSlider_ = nullptr;
+    lv_obj_t* setupAwayHandicapSlider_ = nullptr;
+    lv_obj_t* setupTypeLabel_ = nullptr;
+    lv_obj_t* setupWinningScoreLabel_ = nullptr;
+    lv_obj_t* setupHomeHandicapLabel_ = nullptr;
+    lv_obj_t* setupAwayHandicapLabel_ = nullptr;
 
     // Ends table + input slider on the scoring screen.
     lv_obj_t* endsTableContainer_ = nullptr;

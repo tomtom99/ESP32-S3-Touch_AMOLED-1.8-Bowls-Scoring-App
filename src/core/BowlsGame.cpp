@@ -13,10 +13,21 @@ int maxScorePerEnd(GameType type) {
 BowlsGame::BowlsGame(GameType type,
                       std::vector<std::string> team1Names,
                       std::vector<std::string> team2Names,
-                      uint32_t startTimestamp)
-    : type_(type), startTimestamp_(startTimestamp) {
+                      uint32_t startTimestamp,
+                      int winningScore,
+                      int team1Handicap,
+                      int team2Handicap)
+    : type_(type), startTimestamp_(startTimestamp), winningScore_(winningScore) {
     team1_.playerNames = std::move(team1Names);
     team2_.playerNames = std::move(team2Names);
+    team1_.handicap = team1Handicap;
+    team2_.handicap = team2Handicap;
+    team1_.score = team1Handicap;
+    team2_.score = team2Handicap;
+}
+
+bool BowlsGame::hasReachedWinningScore() const {
+    return team1_.score >= winningScore_ || team2_.score >= winningScore_;
 }
 
 bool BowlsGame::recordEnd(int team1Score, int team2Score) {

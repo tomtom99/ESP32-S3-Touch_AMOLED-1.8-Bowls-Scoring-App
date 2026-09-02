@@ -18,9 +18,13 @@ public:
 
     bool load(GameHistory& history) override;
     bool save(const GameHistory& history) override;
+    bool loadInProgress(BowlsGame& game) override;
+    bool saveInProgress(const BowlsGame& game) override;
+    bool clearInProgress() override;
 
 private:
     const char* path_;
+    const char* inProgressPath_ = "/current-game.json";
 };
 
 }  // namespace bowls

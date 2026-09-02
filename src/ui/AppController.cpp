@@ -83,6 +83,11 @@ AppController::AppController(GameStorage& storage) : storage_(storage) {
 
 void AppController::begin() {
     storage_.load(history_);
+    BowlsGame savedGame;
+    if (storage_.loadInProgress(savedGame) && !savedGame.isFinished()) {
+        currentGame_ = std::unique_ptr<BowlsGame>(new BowlsGame(std::move(savedGame)));
+        hasInProgressGame_ = true;
+    }
     showMenu();
 }
 
@@ -125,16 +130,26 @@ void AppController::showMenu() {
     addTitle(screen, "Crown Green Bowls");
 
     lv_obj_t* newGameBtn = addButton(screen, "New Game", onMenuNewGame);
-    styleButton(newGameBtn, kMenuButtonWidth, 86);
-    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, -54);
+    styleButton(newGameBtn, kMenuButtonWidth, 70);
+    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? -74 : -44);
+
+    if (hasInProgressGame_) {
+        lv_obj_t* continueBtn = addButton(screen, "Continue Game", onMenuContinue);
+        styleButton(continueBtn, kMenuButtonWidth, 70);
+        lv_obj_align(continueBtn, LV_ALIGN_CENTER, 0, 4);
+    }
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
-    styleButton(historyBtn, kMenuButtonWidth, 86);
-    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, 54);
+    styleButton(historyBtn, kMenuButtonWidth, 70);
+    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
 }
 
 void AppController::onMenuNewGame(lv_event_t*) {
     s_instance->showNewGameSetup();
+}
+
+void AppController::onMenuContinue(lv_event_t*) {
+    s_instance->showScoring();
 }
 
 void AppController::onMenuHistory(lv_event_t*) {
@@ -147,44 +162,33 @@ void AppController::onMenuHistory(lv_event_t*) {
 
 void AppController::showNewGameSetup() {
     pendingType_ = GameType::Singles;
+    setupTypeSlider_ = nullptr;
+    setupWinningScoreSlider_ = nullptr;
+    setupHomeHandicapSlider_ = nullptr;
+    setupAwayHandicapSlider_ = nullptr;
     lv_obj_t* screen = createScreen();
-    addTitle(screen, "New Game");
+    addTitle(screen, "Game Type");
 
     lv_obj_t* subtitle = lv_label_create(screen);
-    lv_label_set_text(subtitle, "Home vs Away");
-    lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_20, 0);
+    lv_label_set_text(subtitle, "Choose players per team");
+    styleBodyLabel(subtitle);
     lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
 
-    lv_obj_t* typeRow = lv_obj_create(screen);
-    stylePanel(typeRow);
-    lv_obj_set_size(typeRow, LV_PCT(100), 116);
-    lv_obj_align(typeRow, LV_ALIGN_CENTER, 0, -24);
-    lv_obj_set_flex_flow(typeRow, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(typeRow, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
+    setupTypeSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(setupTypeSlider_, 0, 1);
+    lv_slider_set_value(setupTypeSlider_, 0, LV_ANIM_OFF);
+    lv_obj_set_size(setupTypeSlider_, LV_PCT(88), 54);
+    lv_obj_align(setupTypeSlider_, LV_ALIGN_CENTER, 0, -26);
+    lv_obj_add_event_cb(setupTypeSlider_, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
-    lv_obj_t* singlesBtn = lv_btn_create(typeRow);
-    lv_obj_add_flag(singlesBtn, LV_OBJ_FLAG_CHECKABLE);
-    lv_obj_add_state(singlesBtn, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(singlesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
-    lv_obj_set_user_data(singlesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Singles)));
-    styleButton(singlesBtn, kSetupButtonWidth, kSetupButtonHeight);
-    lv_obj_t* singlesLabel = lv_label_create(singlesBtn);
-    lv_label_set_text(singlesLabel, "Singles");
-    lv_obj_center(singlesLabel);
+    setupTypeLabel_ = lv_label_create(screen);
+    lv_label_set_text(setupTypeLabel_, "Singles");
+    lv_obj_set_style_text_font(setupTypeLabel_, &lv_font_montserrat_32, 0);
+    lv_obj_align(setupTypeLabel_, LV_ALIGN_CENTER, 0, 38);
 
-    lv_obj_t* doublesBtn = lv_btn_create(typeRow);
-    lv_obj_add_flag(doublesBtn, LV_OBJ_FLAG_CHECKABLE);
-    lv_obj_add_event_cb(doublesBtn, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
-    lv_obj_set_user_data(doublesBtn, reinterpret_cast<void*>(static_cast<intptr_t>(GameType::Doubles)));
-    styleButton(doublesBtn, kSetupButtonWidth, kSetupButtonHeight);
-    lv_obj_t* doublesLabel = lv_label_create(doublesBtn);
-    lv_label_set_text(doublesLabel, "Doubles");
-    lv_obj_center(doublesLabel);
-
-    lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupStart);
-    styleButton(startBtn, kStartButtonWidth, kStartButtonHeight);
-    lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
+    styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
+    lv_obj_align(nextBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
     styleButton(backBtn, 150, kButtonHeight);
@@ -192,31 +196,109 @@ void AppController::showNewGameSetup() {
 }
 
 void AppController::onSetupTypeChanged(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    GameType type = static_cast<GameType>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(btn)));
+    const int32_t value = lv_slider_get_value(static_cast<lv_obj_t*>(lv_event_get_target(e)));
+    s_instance->pendingType_ = value == 0 ? GameType::Singles : GameType::Doubles;
+    lv_label_set_text(s_instance->setupTypeLabel_, value == 0 ? "Singles" : "Doubles");
+}
 
-    // Emulate radio-button behaviour: only one of the two type buttons may
-    // be checked at a time.
-    lv_obj_t* row = lv_obj_get_parent(btn);
-    const uint32_t childCount = lv_obj_get_child_cnt(row);
-    for (uint32_t i = 0; i < childCount; ++i) {
-        lv_obj_t* child = lv_obj_get_child(row, i);
-        if (child != btn) {
-            lv_obj_clear_state(child, LV_STATE_CHECKED);
-        }
+void AppController::showWinningScoreSetup() {
+    setupTypeSlider_ = nullptr;
+    lv_obj_t* screen = createScreen();
+    addTitle(screen, "Winning Score");
+
+    lv_obj_t* subtitle = lv_label_create(screen);
+    lv_label_set_text(subtitle, "First team to");
+    styleBodyLabel(subtitle);
+    lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
+
+    setupWinningScoreSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(setupWinningScoreSlider_, 0, 2);
+    lv_slider_set_value(setupWinningScoreSlider_, 0, LV_ANIM_OFF);
+    lv_obj_set_size(setupWinningScoreSlider_, LV_PCT(88), 54);
+    lv_obj_align(setupWinningScoreSlider_, LV_ALIGN_CENTER, 0, -26);
+    lv_obj_add_event_cb(setupWinningScoreSlider_, onSetupWinningScoreChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    setupWinningScoreLabel_ = lv_label_create(screen);
+    lv_label_set_text(setupWinningScoreLabel_, "11 points");
+    lv_obj_set_style_text_font(setupWinningScoreLabel_, &lv_font_montserrat_32, 0);
+    lv_obj_align(setupWinningScoreLabel_, LV_ALIGN_CENTER, 0, 38);
+
+    lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
+    styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
+    lv_obj_align(nextBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
+    styleButton(backBtn, 150, kButtonHeight);
+    lv_obj_align(backBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+}
+
+void AppController::onSetupWinningScoreChanged(lv_event_t* e) {
+    static constexpr int kScores[] = {11, 15, 21};
+    const int32_t value = lv_slider_get_value(static_cast<lv_obj_t*>(lv_event_get_target(e)));
+    s_instance->pendingWinningScore_ = kScores[value];
+    lv_label_set_text_fmt(s_instance->setupWinningScoreLabel_, "%d points", kScores[value]);
+}
+
+void AppController::showHandicapSetup() {
+    setupWinningScoreSlider_ = nullptr;
+    lv_obj_t* screen = createScreen();
+    addTitle(screen, "Handicaps");
+
+    setupHomeHandicapLabel_ = lv_label_create(screen);
+    lv_label_set_text(setupHomeHandicapLabel_, "Home: 0");
+    styleBodyLabel(setupHomeHandicapLabel_);
+    lv_obj_align(setupHomeHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 58);
+    setupHomeHandicapSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(setupHomeHandicapSlider_, 0, 7);
+    lv_obj_set_size(setupHomeHandicapSlider_, LV_PCT(88), 36);
+    lv_obj_align(setupHomeHandicapSlider_, LV_ALIGN_TOP_MID, 0, 90);
+    lv_obj_add_event_cb(setupHomeHandicapSlider_, onSetupHandicapChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    setupAwayHandicapLabel_ = lv_label_create(screen);
+    lv_label_set_text(setupAwayHandicapLabel_, "Away: 0");
+    styleBodyLabel(setupAwayHandicapLabel_);
+    lv_obj_align(setupAwayHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 152);
+    setupAwayHandicapSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(setupAwayHandicapSlider_, 0, 7);
+    lv_obj_set_size(setupAwayHandicapSlider_, LV_PCT(88), 36);
+    lv_obj_align(setupAwayHandicapSlider_, LV_ALIGN_TOP_MID, 0, 184);
+    lv_obj_add_event_cb(setupAwayHandicapSlider_, onSetupHandicapChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupNext);
+    styleButton(startBtn, kStartButtonWidth, kButtonHeight);
+    lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+    lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
+    styleButton(backBtn, 150, kButtonHeight);
+    lv_obj_align(backBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+}
+
+void AppController::onSetupHandicapChanged(lv_event_t* e) {
+    lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    const int value = lv_slider_get_value(slider);
+    if (slider == s_instance->setupHomeHandicapSlider_) {
+        s_instance->pendingHomeHandicap_ = value;
+        lv_label_set_text_fmt(s_instance->setupHomeHandicapLabel_, "Home: %d", value);
+    } else {
+        s_instance->pendingAwayHandicap_ = value;
+        lv_label_set_text_fmt(s_instance->setupAwayHandicapLabel_, "Away: %d", value);
     }
-    lv_obj_add_state(btn, LV_STATE_CHECKED);
-
-    s_instance->pendingType_ = type;
 }
 
-void AppController::onSetupStart(lv_event_t*) {
-    s_instance->startNewGame(s_instance->pendingType_);
+void AppController::onSetupNext(lv_event_t*) {
+    if (s_instance->setupTypeSlider_ != nullptr) {
+        s_instance->showWinningScoreSetup();
+    } else if (s_instance->setupWinningScoreSlider_ != nullptr) {
+        s_instance->showHandicapSetup();
+    } else {
+        s_instance->startNewGame();
+    }
 }
 
-void AppController::startNewGame(GameType type) {
+void AppController::startNewGame() {
     currentGame_ = std::unique_ptr<BowlsGame>(new BowlsGame(
-        type, {"Home"}, {"Away"}, static_cast<uint32_t>(lv_tick_get() / 1000)));
+        pendingType_, {"Home"}, {"Away"}, static_cast<uint32_t>(lv_tick_get() / 1000),
+        pendingWinningScore_, pendingHomeHandicap_, pendingAwayHandicap_));
+    hasInProgressGame_ = true;
+    storage_.saveInProgress(*currentGame_);
     showScoring();
 }
 
@@ -227,39 +309,17 @@ void AppController::startNewGame(GameType type) {
 void AppController::showScoring() {
     lv_obj_t* screen = createScreen();
     editingEndIndex_ = -1;
+    awaitingEndConfirmation_ = currentGame_->hasReachedWinningScore();
     const int32_t maxPerEnd = currentGame_->maxPerEnd();
 
-    // Thin "swipe to end game" bar across the top, keeping the rest of the
-    // tiny 1.8" screen for the ends table and the scoring slider.
-    endGameSlider_ = lv_slider_create(screen);
-    lv_slider_set_range(endGameSlider_, 0, kRecordSliderMax);
-    lv_slider_set_value(endGameSlider_, 0, LV_ANIM_OFF);
-    lv_obj_set_size(endGameSlider_, LV_PCT(100), 32);
-    lv_obj_align(endGameSlider_, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_radius(endGameSlider_, 16, 0);
-    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
-    lv_obj_set_style_radius(endGameSlider_, 16, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(endGameSlider_, lv_color_white(), LV_PART_KNOB);
-    lv_obj_set_style_radius(endGameSlider_, 14, LV_PART_KNOB);
-    lv_obj_set_style_pad_all(endGameSlider_, 2, LV_PART_KNOB);
-    lv_obj_add_event_cb(endGameSlider_, onEndGameSliderPressed, LV_EVENT_PRESSED, nullptr);
-    lv_obj_add_event_cb(endGameSlider_, onEndGameSliderReleased, LV_EVENT_RELEASED, nullptr);
-
-    endGameSliderLabel_ = lv_label_create(endGameSlider_);
-    lv_label_set_text(endGameSliderLabel_, "Swipe to End Game");
-    styleBodyLabel(endGameSliderLabel_);
-    lv_obj_clear_flag(endGameSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_center(endGameSliderLabel_);
-
     // Scrollable table of every end played so far, plus running totals.
-    // Columns: Home score | Home total | End # | Away score | Away total.
+    // Columns: Home score | Home total | End | Away score | Away total.
     // Long-pressing a row opens a menu to edit or delete that end.
     endsTableContainer_ = lv_obj_create(screen);
     lv_obj_set_style_pad_all(endsTableContainer_, 0, 0);
     lv_obj_set_scroll_dir(endsTableContainer_, LV_DIR_VER);
-    lv_obj_set_size(endsTableContainer_, LV_PCT(100), 210);
-    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_size(endsTableContainer_, LV_PCT(100), 250);
+    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 0);
 
     endsTable_ = lv_table_create(endsTableContainer_);
     lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
@@ -306,16 +366,25 @@ void AppController::showScoring() {
     lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(recordSliderLabel_);
 
-    updateSliderLabel(maxPerEnd);
     refreshEndsTable();
+    if (awaitingEndConfirmation_) {
+        activateEndGameSlider();
+    } else {
+        updateSliderLabel(maxPerEnd);
+    }
 }
 
 void AppController::updateSliderLabel(int32_t value) {
+    if (awaitingEndConfirmation_) return;
     const int32_t center = currentGame_->maxPerEnd();
     char buf[16];
     sliderValueText(buf, sizeof(buf), value, center);
     lv_label_set_text(sliderLabel_, buf);
-    lv_obj_set_style_text_color(sliderLabel_, lv_color_black(), 0);
+    const lv_color_t color = value < center ? lv_palette_main(LV_PALETTE_RED)
+                                             : value > center ? lv_palette_main(LV_PALETTE_GREEN)
+                                                              : lv_color_black();
+    lv_obj_set_style_bg_color(slider_, color, LV_PART_INDICATOR);
+    lv_obj_set_style_text_color(sliderLabel_, color, 0);
 }
 
 void AppController::onSliderChanged(lv_event_t* e) {
@@ -336,6 +405,10 @@ void AppController::onRecordEnd(lv_event_t*) {
         s_instance->editingEndIndex_ = -1;
         lv_label_set_text(s_instance->recordSliderLabel_, "Slide to Record End");
         s_instance->refreshEndsTable();
+        s_instance->storage_.saveInProgress(*s_instance->currentGame_);
+        if (s_instance->currentGame_->hasReachedWinningScore()) {
+            s_instance->activateEndGameSlider();
+        }
     } else if (diff == 0) {
         s_instance->recordDeadEnd();
     } else {
@@ -387,11 +460,30 @@ void AppController::onEndGameSliderReleased(lv_event_t* e) {
 void AppController::recordEnd(int team1Score, int team2Score) {
     currentGame_->recordEnd(team1Score, team2Score);
     refreshEndsTable();
+    storage_.saveInProgress(*currentGame_);
+    if (currentGame_->hasReachedWinningScore()) {
+        activateEndGameSlider();
+    }
 }
 
 void AppController::recordDeadEnd() {
     currentGame_->recordDeadEnd();
     refreshEndsTable();
+    storage_.saveInProgress(*currentGame_);
+}
+
+void AppController::activateEndGameSlider() {
+    awaitingEndConfirmation_ = true;
+    endGameSlider_ = slider_;
+    lv_slider_set_range(slider_, 0, kRecordSliderMax);
+    lv_slider_set_value(slider_, 0, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(slider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
+    lv_label_set_text(sliderLabel_, "Slide to End Game");
+    lv_obj_set_style_text_color(sliderLabel_, lv_color_black(), 0);
+    lv_obj_add_event_cb(slider_, onEndGameSliderPressed, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(slider_, onEndGameSliderReleased, LV_EVENT_RELEASED, nullptr);
+    lv_obj_add_flag(recordSlider_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void AppController::refreshEndsTable() {
@@ -401,12 +493,12 @@ void AppController::refreshEndsTable() {
     lv_table_set_row_cnt(endsTable_, static_cast<uint16_t>(ends.size() + 1));
     lv_table_set_cell_value(endsTable_, 0, 0, "Scr");
     lv_table_set_cell_value(endsTable_, 0, 1, "Tot");
-    lv_table_set_cell_value(endsTable_, 0, 2, "#");
+    lv_table_set_cell_value(endsTable_, 0, 2, "End");
     lv_table_set_cell_value(endsTable_, 0, 3, "Scr");
     lv_table_set_cell_value(endsTable_, 0, 4, "Tot");
 
-    int homeTotal = 0;
-    int awayTotal = 0;
+    int homeTotal = game.team1().handicap;
+    int awayTotal = game.team2().handicap;
     char buf[8];
     for (size_t i = 0; i < ends.size(); ++i) {
         const EndResult& end = ends[i];
@@ -536,6 +628,7 @@ void AppController::onEndMenuDelete(lv_event_t*) {
 
     s_instance->currentGame_->removeEnd(static_cast<size_t>(index));
     s_instance->refreshEndsTable();
+    s_instance->storage_.saveInProgress(*s_instance->currentGame_);
 }
 
 void AppController::onEndMenuCancel(lv_event_t*) {
@@ -546,7 +639,9 @@ void AppController::endCurrentGame() {
     currentGame_->finish(static_cast<uint32_t>(lv_tick_get() / 1000));
     history_.addGame(*currentGame_);
     storage_.save(history_);
+    storage_.clearInProgress();
     currentGame_.reset();
+    hasInProgressGame_ = false;
     showMenu();
 }
 
