@@ -30,6 +30,19 @@ constexpr int32_t kRecordThreshold = 85;
 constexpr int kMinBrightnessPercent = 10;
 constexpr int kDefaultBrightnessPercent = 80;
 
+// How often the battery percentage label is refreshed.
+constexpr uint32_t kBatteryPollIntervalMs = 30000;
+
+constexpr uint16_t kRecordHintDurationMs = 1200;
+
+void animateRecordSliderHint(void* hint, int32_t progress) {
+    lv_obj_t* hintLabel = static_cast<lv_obj_t*>(hint);
+    lv_obj_t* slider = lv_obj_get_parent(hintLabel);
+    const lv_coord_t travel = lv_obj_get_width(slider) - lv_obj_get_width(hintLabel) - 32;
+    const lv_coord_t offset = 16 + (travel * progress) / 100;
+    lv_obj_align(hintLabel, LV_ALIGN_LEFT_MID, offset, 0);
+}
+
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(obj, 8, 0);
@@ -90,6 +103,10 @@ void AppController::setBrightnessSetter(void (*setter)(uint8_t)) {
     brightnessSetter_ = setter;
 }
 
+void AppController::setBatteryPercentGetter(int (*getter)()) {
+    batteryPercentGetter_ = getter;
+}
+
 void AppController::begin() {
     storage_.load(history_);
     BowlsGame savedGame;
@@ -107,6 +124,8 @@ void AppController::begin() {
         brightnessSetter_(static_cast<uint8_t>((brightnessPercent_ * 255) / 100));
     }
 
+    createBatteryLabel();
+
     showMenu();
 }
 
@@ -119,6 +138,54 @@ lv_obj_t* AppController::createScreen() {
     styleScreen(screen);
     lv_scr_load(screen);
     return screen;
+}
+
+// Battery label lives on the LVGL top layer (not a screen), so it stays
+// visible across every lv_scr_load() call without needing to be re-added.
+void AppController::createBatteryLabel() {
+    lv_obj_t* layer = lv_layer_top();
+    batteryLabel_ = lv_label_create(layer);
+    lv_obj_set_style_text_font(batteryLabel_, &lv_font_montserrat_20, 0);
+    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -6, 6);
+    lv_label_set_text(batteryLabel_, "");
+
+    updateBatteryLabel();
+    lv_timer_create(onBatteryTimer, kBatteryPollIntervalMs, nullptr);
+}
+
+void AppController::updateBatteryLabel() {
+    if (batteryLabel_ == nullptr) return;
+    int percent = batteryPercentGetter_ != nullptr ? batteryPercentGetter_() : -1;
+    if (percent < 0 || percent > 100) {
+        lv_label_set_text(batteryLabel_, "");
+        return;
+    }
+
+    const char* icon = LV_SYMBOL_BATTERY_EMPTY;
+    if (percent >= 80) {
+        icon = LV_SYMBOL_BATTERY_FULL;
+    } else if (percent >= 55) {
+        icon = LV_SYMBOL_BATTERY_3;
+    } else if (percent >= 30) {
+        icon = LV_SYMBOL_BATTERY_2;
+    } else if (percent >= 15) {
+        icon = LV_SYMBOL_BATTERY_1;
+    }
+
+    // Red/amber/green traffic-light coloring so charge state is visible at a glance.
+    lv_color_t color = percent >= 40 ? lv_palette_main(LV_PALETTE_GREEN)
+                        : percent >= 15 ? lv_palette_main(LV_PALETTE_ORANGE)
+                                        : lv_palette_main(LV_PALETTE_RED);
+    lv_obj_set_style_text_color(batteryLabel_, color, 0);
+    lv_label_set_text(batteryLabel_, icon);
+    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -6, 6);
+}
+
+void AppController::onBatteryTimer(lv_timer_t* timer) {
+    (void)timer;
+    if (s_instance != nullptr) {
+        s_instance->updateBatteryLabel();
+    }
 }
 
 lv_obj_t* AppController::addTitle(lv_obj_t* parent, const char* text) {
@@ -391,10 +458,27 @@ void AppController::showScoring() {
     lv_obj_add_event_cb(recordSlider_, onRecordSliderReleased, LV_EVENT_RELEASED, nullptr);
 
     recordSliderLabel_ = lv_label_create(recordSlider_);
-    lv_label_set_text(recordSliderLabel_, "Slide to Record End");
+    lv_label_set_text(recordSliderLabel_, "RECORD END");
     lv_obj_set_style_text_font(recordSliderLabel_, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(recordSliderLabel_, lv_color_black(), 0);
     lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(recordSliderLabel_);
+
+    lv_obj_t* recordSliderHint = lv_label_create(recordSlider_);
+    lv_label_set_text(recordSliderHint, ">>");
+    lv_obj_set_style_text_font(recordSliderHint, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_color(recordSliderHint, lv_color_black(), 0);
+    lv_obj_clear_flag(recordSliderHint, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(recordSliderHint, LV_ALIGN_LEFT_MID, 16, 0);
+
+    lv_anim_t recordHintAnimation;
+    lv_anim_init(&recordHintAnimation);
+    lv_anim_set_var(&recordHintAnimation, recordSliderHint);
+    lv_anim_set_values(&recordHintAnimation, 0, 100);
+    lv_anim_set_time(&recordHintAnimation, kRecordHintDurationMs);
+    lv_anim_set_repeat_count(&recordHintAnimation, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_exec_cb(&recordHintAnimation, animateRecordSliderHint);
+    lv_anim_start(&recordHintAnimation);
 
     refreshEndsTable();
     if (awaitingEndConfirmation_) {
@@ -433,7 +517,7 @@ void AppController::onRecordEnd(lv_event_t*) {
         s_instance->currentGame_->editEnd(static_cast<size_t>(s_instance->editingEndIndex_),
                                           team1Score, team2Score);
         s_instance->editingEndIndex_ = -1;
-        lv_label_set_text(s_instance->recordSliderLabel_, "Slide to Record End");
+        lv_label_set_text(s_instance->recordSliderLabel_, "RECORD END");
         s_instance->refreshEndsTable();
         s_instance->storage_.saveInProgress(*s_instance->currentGame_);
         if (s_instance->currentGame_->hasReachedWinningScore()) {

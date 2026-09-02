@@ -19,6 +19,7 @@
 #include <lvgl.h>
 
 #include "config/BoardPins.h"
+#include "hal/BatteryMonitor.h"
 #include "hal/TouchDriver.h"
 #include "storage/FlashGameStorage.h"
 #include "ui/AppController.h"
@@ -38,6 +39,13 @@ void setDisplayBrightness(uint8_t brightness) {
 
 // --- Touch ---------------------------------------------------------------
 bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
+
+// --- Battery (onboard AXP2101 PMU, shares the touch/expander I2C bus) ------
+bowls::BatteryMonitor g_battery;
+
+int readBatteryPercent() {
+    return g_battery.readPercent();
+}
 
 // --- LVGL ------------------------------------------------------------------
 constexpr uint32_t kDrawBufLines = 40;
@@ -117,6 +125,10 @@ void setup() {
 
     g_touch.begin();
 
+    if (!g_battery.begin(Wire, TOUCH_IIC_SDA, TOUCH_IIC_SCL)) {
+        Serial.println("Battery warning: failed to initialize the AXP2101 PMU.");
+    }
+
     g_storage.begin();
 
     lv_init();
@@ -137,6 +149,7 @@ void setup() {
     static bowls::AppController app(g_storage);
     g_app = &app;
     g_app->setBrightnessSetter(setDisplayBrightness);
+    g_app->setBatteryPercentGetter(readBatteryPercent);
     g_app->begin();
 }
 

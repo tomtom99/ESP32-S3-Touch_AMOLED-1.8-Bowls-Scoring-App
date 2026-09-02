@@ -23,6 +23,11 @@ public:
     // on startup.
     void setBrightnessSetter(void (*setter)(uint8_t));
 
+    // Registers a callback used to read the current battery percentage
+    // (0-100), or a negative value if unavailable. Drives a small label
+    // shown in the top-right corner of every screen.
+    void setBatteryPercentGetter(int (*getter)());
+
     // Loads any saved history from storage and shows the main menu.
     void begin();
 
@@ -47,6 +52,12 @@ private:
     void activateEndGameSlider();
     void applyBrightness();
     void resetUserData();
+
+    // Battery indicator (top-right, drawn on the LVGL top layer so it
+    // survives screen switches).
+    void createBatteryLabel();
+    void updateBatteryLabel();
+    static void onBatteryTimer(lv_timer_t* timer);
 
     // Long-press context menu for editing/deleting a single end.
     void showEndMenu(int endIndex);
@@ -147,6 +158,10 @@ private:
     lv_obj_t* settingsBrightnessLabel_ = nullptr;
     int brightnessPercent_ = 80;
     void (*brightnessSetter_)(uint8_t) = nullptr;
+
+    // Battery percentage indicator.
+    lv_obj_t* batteryLabel_ = nullptr;
+    int (*batteryPercentGetter_)() = nullptr;
 
     // "Are you sure?" overlay shown before resetting all saved data.
     lv_obj_t* resetConfirmOverlay_ = nullptr;
