@@ -120,11 +120,10 @@ private:
     bool hasInProgressGame_ = false;
     bool awaitingEndConfirmation_ = false;
 
-    lv_obj_t* setupTypeSlider_ = nullptr;
+    lv_obj_t* setupTypeSwitch_ = nullptr;
     lv_obj_t* setupWinningScoreSlider_ = nullptr;
     lv_obj_t* setupHomeHandicapSlider_ = nullptr;
     lv_obj_t* setupAwayHandicapSlider_ = nullptr;
-    lv_obj_t* setupTypeLabel_ = nullptr;
     lv_obj_t* setupWinningScoreLabel_ = nullptr;
     lv_obj_t* setupHomeHandicapLabel_ = nullptr;
     lv_obj_t* setupAwayHandicapLabel_ = nullptr;

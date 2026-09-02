@@ -30,6 +30,7 @@
 #define LV_USE_LIST 1
 #define LV_USE_TABLE 1
 #define LV_USE_SLIDER 1
+#define LV_USE_SWITCH 1
 #define LV_USE_FLEX 1
 
 /* Built-in default font used for labels/buttons. */

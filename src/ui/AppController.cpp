@@ -73,6 +73,12 @@ void styleButton(lv_obj_t* btn, lv_coord_t width = kButtonWidth, lv_coord_t heig
     lv_obj_set_style_border_width(btn, 2, 0);
 }
 
+void styleForwardButton(lv_obj_t* btn) {
+    lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREEN, 3), 0);
+    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREEN), LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, lv_palette_darken(LV_PALETTE_GREEN, 2), 0);
+}
+
 void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(label, lv_color_black(), 0);
@@ -218,18 +224,21 @@ void AppController::showMenu() {
 
     lv_obj_t* newGameBtn = addButton(screen, "New Game", onMenuNewGame);
     styleButton(newGameBtn, kMenuButtonWidth, 70);
+    styleForwardButton(newGameBtn);
     lv_obj_set_style_text_font(newGameBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? -74 : -44);
 
     if (hasInProgressGame_) {
         lv_obj_t* continueBtn = addButton(screen, "Continue Game", onMenuContinue);
         styleButton(continueBtn, kMenuButtonWidth, 70);
+        styleForwardButton(continueBtn);
         lv_obj_set_style_text_font(continueBtn, &lv_font_montserrat_28, 0);
         lv_obj_align(continueBtn, LV_ALIGN_CENTER, 0, 4);
     }
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
     styleButton(historyBtn, kMenuButtonWidth, 70);
+    styleForwardButton(historyBtn);
     lv_obj_set_style_text_font(historyBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
 
@@ -257,7 +266,7 @@ void AppController::onMenuHistory(lv_event_t*) {
 
 void AppController::showNewGameSetup() {
     pendingType_ = GameType::Singles;
-    setupTypeSlider_ = nullptr;
+    setupTypeSwitch_ = nullptr;
     setupWinningScoreSlider_ = nullptr;
     setupHomeHandicapSlider_ = nullptr;
     setupAwayHandicapSlider_ = nullptr;
@@ -269,20 +278,26 @@ void AppController::showNewGameSetup() {
     styleBodyLabel(subtitle);
     lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
 
-    setupTypeSlider_ = lv_slider_create(screen);
-    lv_slider_set_range(setupTypeSlider_, 0, 1);
-    lv_slider_set_value(setupTypeSlider_, 0, LV_ANIM_OFF);
-    lv_obj_set_size(setupTypeSlider_, LV_PCT(88), 54);
-    lv_obj_align(setupTypeSlider_, LV_ALIGN_CENTER, 0, -26);
-    lv_obj_add_event_cb(setupTypeSlider_, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_obj_t* singlesLabel = lv_label_create(screen);
+    lv_label_set_text(singlesLabel, "Singles");
+    lv_obj_set_style_text_font(singlesLabel, &lv_font_montserrat_28, 0);
+    lv_obj_align(singlesLabel, LV_ALIGN_CENTER, -104, -12);
 
-    setupTypeLabel_ = lv_label_create(screen);
-    lv_label_set_text(setupTypeLabel_, "Singles");
-    lv_obj_set_style_text_font(setupTypeLabel_, &lv_font_montserrat_32, 0);
-    lv_obj_align(setupTypeLabel_, LV_ALIGN_CENTER, 0, 38);
+    setupTypeSwitch_ = lv_switch_create(screen);
+    lv_obj_set_size(setupTypeSwitch_, 92, 54);
+    lv_obj_align(setupTypeSwitch_, LV_ALIGN_CENTER, 0, -12);
+    lv_obj_set_style_bg_color(setupTypeSwitch_, lv_palette_lighten(LV_PALETTE_GREEN, 3),
+                              LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_event_cb(setupTypeSwitch_, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    lv_obj_t* doublesLabel = lv_label_create(screen);
+    lv_label_set_text(doublesLabel, "Doubles");
+    lv_obj_set_style_text_font(doublesLabel, &lv_font_montserrat_28, 0);
+    lv_obj_align(doublesLabel, LV_ALIGN_CENTER, 112, -12);
 
     lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
     styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
+    styleForwardButton(nextBtn);
     lv_obj_align(nextBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
@@ -291,13 +306,14 @@ void AppController::showNewGameSetup() {
 }
 
 void AppController::onSetupTypeChanged(lv_event_t* e) {
-    const int32_t value = lv_slider_get_value(static_cast<lv_obj_t*>(lv_event_get_target(e)));
-    s_instance->pendingType_ = value == 0 ? GameType::Singles : GameType::Doubles;
-    lv_label_set_text(s_instance->setupTypeLabel_, value == 0 ? "Singles" : "Doubles");
+    lv_obj_t* typeSwitch = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    s_instance->pendingType_ = lv_obj_has_state(typeSwitch, LV_STATE_CHECKED)
+                                  ? GameType::Doubles
+                                  : GameType::Singles;
 }
 
 void AppController::showWinningScoreSetup() {
-    setupTypeSlider_ = nullptr;
+    setupTypeSwitch_ = nullptr;
     lv_obj_t* screen = createScreen();
     addTitle(screen, "Winning Score");
 
@@ -320,6 +336,7 @@ void AppController::showWinningScoreSetup() {
 
     lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
     styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
+    styleForwardButton(nextBtn);
     lv_obj_align(nextBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
     styleButton(backBtn, 150, kButtonHeight);
@@ -360,6 +377,7 @@ void AppController::showHandicapSetup() {
 
     lv_obj_t* startBtn = addButton(screen, "Start Game", onSetupNext);
     styleButton(startBtn, kStartButtonWidth, kButtonHeight);
+    styleForwardButton(startBtn);
     lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
     styleButton(backBtn, 150, kButtonHeight);
@@ -379,7 +397,7 @@ void AppController::onSetupHandicapChanged(lv_event_t* e) {
 }
 
 void AppController::onSetupNext(lv_event_t*) {
-    if (s_instance->setupTypeSlider_ != nullptr) {
+    if (s_instance->setupTypeSwitch_ != nullptr) {
         s_instance->showWinningScoreSetup();
     } else if (s_instance->setupWinningScoreSlider_ != nullptr) {
         s_instance->showHandicapSetup();
@@ -610,8 +628,10 @@ void AppController::refreshEndsTable() {
 
 void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
     const auto& ends = game.ends();
+    const bool hasHandicap = game.team1().handicap != 0 || game.team2().handicap != 0;
+    const uint16_t firstEndRow = hasHandicap ? 2 : 1;
 
-    lv_table_set_row_cnt(table, static_cast<uint16_t>(ends.size() + 1));
+    lv_table_set_row_cnt(table, static_cast<uint16_t>(ends.size() + firstEndRow));
     lv_table_set_cell_value(table, 0, 0, "Scr");
     lv_table_set_cell_value(table, 0, 1, "Tot");
     lv_table_set_cell_value(table, 0, 2, "End");
@@ -621,11 +641,20 @@ void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
     int homeTotal = game.team1().handicap;
     int awayTotal = game.team2().handicap;
     char buf[8];
+    if (hasHandicap) {
+        lv_table_set_cell_value(table, 1, 0, "Hcap");
+        std::snprintf(buf, sizeof(buf), "%d", homeTotal);
+        lv_table_set_cell_value(table, 1, 1, buf);
+        lv_table_set_cell_value(table, 1, 2, "-");
+        lv_table_set_cell_value(table, 1, 3, "Hcap");
+        std::snprintf(buf, sizeof(buf), "%d", awayTotal);
+        lv_table_set_cell_value(table, 1, 4, buf);
+    }
     for (size_t i = 0; i < ends.size(); ++i) {
         const EndResult& end = ends[i];
         homeTotal += end.team1Score;
         awayTotal += end.team2Score;
-        const uint16_t row = static_cast<uint16_t>(i + 1);
+        const uint16_t row = static_cast<uint16_t>(i + firstEndRow);
 
         if (end.team1Score == 0 && end.team2Score == 0) {
             lv_table_set_cell_value(table, row, 0, "-");
@@ -642,7 +671,7 @@ void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
 
         std::snprintf(buf, sizeof(buf), "%d", homeTotal);
         lv_table_set_cell_value(table, row, 1, buf);
-        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(row));
+        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(i + 1));
         lv_table_set_cell_value(table, row, 2, buf);
         std::snprintf(buf, sizeof(buf), "%d", awayTotal);
         lv_table_set_cell_value(table, row, 4, buf);
@@ -672,8 +701,11 @@ void AppController::onEndsTableLongPressed(lv_event_t* e) {
     uint16_t row = 0;
     uint16_t col = 0;
     lv_table_get_selected_cell(table, &row, &col);
-    if (row == LV_TABLE_CELL_NONE || row == 0) return;  // no cell, or the header row
-    s_instance->showEndMenu(static_cast<int>(row) - 1);
+    const bool hasHandicap = s_instance->currentGame_->team1().handicap != 0 ||
+                             s_instance->currentGame_->team2().handicap != 0;
+    const uint16_t firstEndRow = hasHandicap ? 2 : 1;
+    if (row == LV_TABLE_CELL_NONE || row < firstEndRow) return;
+    s_instance->showEndMenu(static_cast<int>(row - firstEndRow));
 }
 
 void AppController::showEndMenu(int endIndex) {
@@ -867,6 +899,7 @@ void AppController::showHistoryDetail(size_t index) {
     if (isInProgress) {
         lv_obj_t* continueBtn = addButton(screen, "Continue", onMenuContinue);
         styleButton(continueBtn, kStartButtonWidth, kButtonHeight);
+        styleForwardButton(continueBtn);
         lv_obj_align(continueBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
         lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
