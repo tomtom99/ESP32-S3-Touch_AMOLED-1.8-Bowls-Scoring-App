@@ -21,10 +21,14 @@ public:
     bool loadInProgress(BowlsGame& game) override;
     bool saveInProgress(const BowlsGame& game) override;
     bool clearInProgress() override;
+    bool loadBrightness(uint8_t& brightness) override;
+    bool saveBrightness(uint8_t brightness) override;
+    bool resetAll() override;
 
 private:
     const char* path_;
     const char* inProgressPath_ = "/current-game.json";
+    const char* settingsPath_ = "/settings.json";
 };
 
 }  // namespace bowls

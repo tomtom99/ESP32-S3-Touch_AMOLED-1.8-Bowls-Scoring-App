@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 
+#include <cstdint>
 #include <memory>
 
 #include "core/BowlsGame.h"
@@ -17,6 +18,11 @@ class AppController {
 public:
     explicit AppController(GameStorage& storage);
 
+    // Registers a callback used to change the physical display brightness.
+    // Must be called before begin() to have the saved brightness applied
+    // on startup.
+    void setBrightnessSetter(void (*setter)(uint8_t));
+
     // Loads any saved history from storage and shows the main menu.
     void begin();
 
@@ -29,6 +35,7 @@ private:
     void showScoring();
     void showHistoryList();
     void showHistoryDetail(size_t index);
+    void showSettings();
 
     // --- Actions -----------------------------------------------------------
     void startNewGame();
@@ -38,10 +45,19 @@ private:
     void refreshEndsTable();
     void updateSliderLabel(int32_t value);
     void activateEndGameSlider();
+    void applyBrightness();
+    void resetUserData();
 
     // Long-press context menu for editing/deleting a single end.
     void showEndMenu(int endIndex);
     void closeEndMenu();
+
+    // Confirmation overlay shown before wiping all saved data.
+    void showResetConfirm();
+    void closeResetConfirm();
+
+    // Fills a read-only or live ends table (Scr/Tot columns) for a game.
+    static void populateEndsTable(lv_obj_t* table, const BowlsGame& game);
 
     // Renders the Scr/Tot cells with the largest available font.
     static void onEndsTableDrawPart(lv_event_t* e);
@@ -75,6 +91,11 @@ private:
     static void onEndMenuCancel(lv_event_t* e);
     static void onBackToMenu(lv_event_t* e);
     static void onHistoryItemClicked(lv_event_t* e);
+    static void onMenuSettings(lv_event_t* e);
+    static void onSettingsBrightnessChanged(lv_event_t* e);
+    static void onSettingsResetRequested(lv_event_t* e);
+    static void onResetConfirmYes(lv_event_t* e);
+    static void onResetConfirmCancel(lv_event_t* e);
 
     static AppController* s_instance;
 
@@ -120,6 +141,15 @@ private:
     // Long-press context menu overlay for a specific end (edit/delete).
     lv_obj_t* endMenuOverlay_ = nullptr;
     int endMenuIndex_ = -1;
+
+    // Settings screen.
+    lv_obj_t* settingsBrightnessSlider_ = nullptr;
+    lv_obj_t* settingsBrightnessLabel_ = nullptr;
+    int brightnessPercent_ = 80;
+    void (*brightnessSetter_)(uint8_t) = nullptr;
+
+    // "Are you sure?" overlay shown before resetting all saved data.
+    lv_obj_t* resetConfirmOverlay_ = nullptr;
 };
 
 }  // namespace bowls

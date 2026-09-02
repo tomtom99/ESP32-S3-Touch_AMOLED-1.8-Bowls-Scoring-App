@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "core/GameHistory.h"
 
 namespace bowls {
@@ -24,6 +26,14 @@ public:
     virtual bool loadInProgress(BowlsGame& game) = 0;
     virtual bool saveInProgress(const BowlsGame& game) = 0;
     virtual bool clearInProgress() = 0;
+
+    // Loads/saves the display brightness (0-255). A false result from
+    // loadBrightness() means no value has been saved yet.
+    virtual bool loadBrightness(uint8_t& brightness) = 0;
+    virtual bool saveBrightness(uint8_t brightness) = 0;
+
+    // Wipes all persisted data: history, in-progress game and settings.
+    virtual bool resetAll() = 0;
 };
 
 }  // namespace bowls

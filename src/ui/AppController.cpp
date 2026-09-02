@@ -25,6 +25,11 @@ constexpr int32_t kMinSwipeDistance = 60;
 constexpr int32_t kRecordSliderMax = 100;
 constexpr int32_t kRecordThreshold = 85;
 
+// Brightness is stored/adjusted as a percentage; never let it drop so low
+// the screen becomes unreadable/unusable.
+constexpr int kMinBrightnessPercent = 10;
+constexpr int kDefaultBrightnessPercent = 80;
+
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(obj, 8, 0);
@@ -81,6 +86,10 @@ AppController::AppController(GameStorage& storage) : storage_(storage) {
     s_instance = this;
 }
 
+void AppController::setBrightnessSetter(void (*setter)(uint8_t)) {
+    brightnessSetter_ = setter;
+}
+
 void AppController::begin() {
     storage_.load(history_);
     BowlsGame savedGame;
@@ -88,6 +97,16 @@ void AppController::begin() {
         currentGame_ = std::unique_ptr<BowlsGame>(new BowlsGame(std::move(savedGame)));
         hasInProgressGame_ = true;
     }
+
+    uint8_t savedBrightness = 0;
+    if (storage_.loadBrightness(savedBrightness)) {
+        brightnessPercent_ = (static_cast<int>(savedBrightness) * 100) / 255;
+        if (brightnessPercent_ < kMinBrightnessPercent) brightnessPercent_ = kMinBrightnessPercent;
+    }
+    if (brightnessSetter_ != nullptr) {
+        brightnessSetter_(static_cast<uint8_t>((brightnessPercent_ * 255) / 100));
+    }
+
     showMenu();
 }
 
@@ -142,6 +161,10 @@ void AppController::showMenu() {
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
     styleButton(historyBtn, kMenuButtonWidth, 70);
     lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
+
+    lv_obj_t* settingsBtn = addButton(screen, "Settings", onMenuSettings);
+    styleButton(settingsBtn, kMenuButtonWidth, 70);
+    lv_obj_align(settingsBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 160 : 122);
 }
 
 void AppController::onMenuNewGame(lv_event_t*) {
@@ -487,15 +510,22 @@ void AppController::activateEndGameSlider() {
 }
 
 void AppController::refreshEndsTable() {
-    const BowlsGame& game = *currentGame_;
+    populateEndsTable(endsTable_, *currentGame_);
+    // Update the container's own layout (not just the table's) so its
+    // scrollable range reflects the newly added row before we scroll it.
+    lv_obj_update_layout(endsTableContainer_);
+    lv_obj_scroll_to_y(endsTableContainer_, LV_COORD_MAX, LV_ANIM_OFF);
+}
+
+void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
     const auto& ends = game.ends();
 
-    lv_table_set_row_cnt(endsTable_, static_cast<uint16_t>(ends.size() + 1));
-    lv_table_set_cell_value(endsTable_, 0, 0, "Scr");
-    lv_table_set_cell_value(endsTable_, 0, 1, "Tot");
-    lv_table_set_cell_value(endsTable_, 0, 2, "End");
-    lv_table_set_cell_value(endsTable_, 0, 3, "Scr");
-    lv_table_set_cell_value(endsTable_, 0, 4, "Tot");
+    lv_table_set_row_cnt(table, static_cast<uint16_t>(ends.size() + 1));
+    lv_table_set_cell_value(table, 0, 0, "Scr");
+    lv_table_set_cell_value(table, 0, 1, "Tot");
+    lv_table_set_cell_value(table, 0, 2, "End");
+    lv_table_set_cell_value(table, 0, 3, "Scr");
+    lv_table_set_cell_value(table, 0, 4, "Tot");
 
     int homeTotal = game.team1().handicap;
     int awayTotal = game.team2().handicap;
@@ -507,28 +537,25 @@ void AppController::refreshEndsTable() {
         const uint16_t row = static_cast<uint16_t>(i + 1);
 
         if (end.team1Score == 0 && end.team2Score == 0) {
-            lv_table_set_cell_value(endsTable_, row, 0, "-");
-            lv_table_set_cell_value(endsTable_, row, 3, "-");
+            lv_table_set_cell_value(table, row, 0, "-");
+            lv_table_set_cell_value(table, row, 3, "-");
         } else if (end.team1Score > 0) {
             std::snprintf(buf, sizeof(buf), "%d", end.team1Score);
-            lv_table_set_cell_value(endsTable_, row, 0, buf);
-            lv_table_set_cell_value(endsTable_, row, 3, "-");
+            lv_table_set_cell_value(table, row, 0, buf);
+            lv_table_set_cell_value(table, row, 3, "-");
         } else {
-            lv_table_set_cell_value(endsTable_, row, 0, "-");
+            lv_table_set_cell_value(table, row, 0, "-");
             std::snprintf(buf, sizeof(buf), "%d", end.team2Score);
-            lv_table_set_cell_value(endsTable_, row, 3, buf);
+            lv_table_set_cell_value(table, row, 3, buf);
         }
 
         std::snprintf(buf, sizeof(buf), "%d", homeTotal);
-        lv_table_set_cell_value(endsTable_, row, 1, buf);
+        lv_table_set_cell_value(table, row, 1, buf);
         std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(row));
-        lv_table_set_cell_value(endsTable_, row, 2, buf);
+        lv_table_set_cell_value(table, row, 2, buf);
         std::snprintf(buf, sizeof(buf), "%d", awayTotal);
-        lv_table_set_cell_value(endsTable_, row, 4, buf);
+        lv_table_set_cell_value(table, row, 4, buf);
     }
-
-    lv_obj_update_layout(endsTable_);
-    lv_obj_scroll_to_y(endsTableContainer_, LV_COORD_MAX, LV_ANIM_OFF);
 }
 
 void AppController::onEndsTableDrawPart(lv_event_t* e) {
@@ -659,6 +686,25 @@ void AppController::showHistoryList() {
     lv_obj_set_style_text_font(list, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(list, lv_color_black(), 0);
     lv_obj_set_style_bg_color(list, lv_color_white(), 0);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+
+    if (hasInProgressGame_ && currentGame_) {
+        const BowlsGame& game = *currentGame_;
+        char text[64];
+        std::snprintf(text, sizeof(text), "In Progress: %s vs %s : %d - %d",
+                      game.team1().playerNames.empty() ? "" : game.team1().playerNames[0].c_str(),
+                      game.team2().playerNames.empty() ? "" : game.team2().playerNames[0].c_str(),
+                      game.team1().score, game.team2().score);
+        lv_obj_t* btn = lv_list_add_btn(list, nullptr, text);
+        lv_obj_set_height(btn, 64);
+        lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(btn, lv_color_black(), 0);
+        lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_ORANGE, 3), 0);
+        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_ORANGE), LV_STATE_PRESSED);
+        lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_PRESSED, nullptr);
+        lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(history_.count())));
+    }
 
     for (size_t i = 0; i < history_.count(); ++i) {
         const BowlsGame& game = history_.at(i);
@@ -690,7 +736,8 @@ void AppController::onHistoryItemClicked(lv_event_t* e) {
 
 void AppController::showHistoryDetail(size_t index) {
     lv_obj_t* screen = createScreen();
-    const BowlsGame& game = history_.at(index);
+    const bool isInProgress = (index == history_.count());
+    const BowlsGame& game = isInProgress ? *currentGame_ : history_.at(index);
 
     char title[32];
     std::snprintf(title, sizeof(title), "%s Game",
@@ -701,20 +748,169 @@ void AppController::showHistoryDetail(size_t index) {
     styleBodyLabel(summary);
     lv_label_set_long_mode(summary, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(summary, LV_PCT(90));
-    char buf[128];
+    char buf[144];
     std::snprintf(buf, sizeof(buf), "Home: %d\nAway: %d\nEnds played: %d\n%s",
                   game.team1().score, game.team2().score, game.endCount(),
-                  game.resultSummary().c_str());
+                  isInProgress ? "In progress" : game.resultSummary().c_str());
     lv_label_set_text(summary, buf);
-    lv_obj_align(summary, LV_ALIGN_TOP_MID, 0, 68);
+    lv_obj_align(summary, LV_ALIGN_TOP_MID, 0, 50);
 
-    lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
-    styleButton(backBtn, 150, kButtonHeight);
-    lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    // Scorecard: full end-by-end breakdown, matching the live scoring table.
+    lv_obj_t* tableContainer = lv_obj_create(screen);
+    lv_obj_set_style_pad_all(tableContainer, 0, 0);
+    lv_obj_set_scroll_dir(tableContainer, LV_DIR_VER);
+    lv_obj_set_size(tableContainer, LV_PCT(94), 190);
+    lv_obj_align(tableContainer, LV_ALIGN_TOP_MID, 0, 150);
+
+    lv_obj_t* table = lv_table_create(tableContainer);
+    lv_obj_set_style_text_font(table, &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_table_set_col_cnt(table, 5);
+    lv_table_set_col_width(table, 0, 70);
+    lv_table_set_col_width(table, 1, 86);
+    lv_table_set_col_width(table, 2, 28);
+    lv_table_set_col_width(table, 3, 70);
+    lv_table_set_col_width(table, 4, 86);
+    lv_obj_add_event_cb(table, onEndsTableDrawPart, LV_EVENT_DRAW_PART_BEGIN, nullptr);
+    populateEndsTable(table, game);
+
+    if (isInProgress) {
+        lv_obj_t* continueBtn = addButton(screen, "Continue", onMenuContinue);
+        styleButton(continueBtn, kStartButtonWidth, kButtonHeight);
+        lv_obj_align(continueBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+
+        lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
+        styleButton(backBtn, 150, kButtonHeight);
+        lv_obj_align(backBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+    } else {
+        lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
+        styleButton(backBtn, 150, kButtonHeight);
+        lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    }
 }
 
 void AppController::onBackToMenu(lv_event_t*) {
     s_instance->showMenu();
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+void AppController::onMenuSettings(lv_event_t*) {
+    s_instance->showSettings();
+}
+
+void AppController::showSettings() {
+    lv_obj_t* screen = createScreen();
+    addTitle(screen, "Settings");
+
+    lv_obj_t* label = lv_label_create(screen);
+    lv_label_set_text(label, "Screen Brightness");
+    styleBodyLabel(label);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 56);
+
+    settingsBrightnessSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(settingsBrightnessSlider_, kMinBrightnessPercent, 100);
+    lv_slider_set_value(settingsBrightnessSlider_, brightnessPercent_, LV_ANIM_OFF);
+    lv_obj_set_size(settingsBrightnessSlider_, LV_PCT(88), 40);
+    lv_obj_align(settingsBrightnessSlider_, LV_ALIGN_TOP_MID, 0, 96);
+    lv_obj_add_event_cb(settingsBrightnessSlider_, onSettingsBrightnessChanged, LV_EVENT_VALUE_CHANGED,
+                        nullptr);
+
+    settingsBrightnessLabel_ = lv_label_create(screen);
+    lv_obj_set_style_text_font(settingsBrightnessLabel_, &lv_font_montserrat_28, 0);
+    lv_label_set_text_fmt(settingsBrightnessLabel_, "%d%%", brightnessPercent_);
+    lv_obj_align(settingsBrightnessLabel_, LV_ALIGN_TOP_MID, 0, 150);
+
+    lv_obj_t* resetBtn = addButton(screen, "Reset User Data", onSettingsResetRequested);
+    styleButton(resetBtn, kMenuButtonWidth, 64);
+    lv_obj_set_style_bg_color(resetBtn, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_bg_color(resetBtn, lv_palette_darken(LV_PALETTE_RED, 2), LV_STATE_PRESSED);
+    lv_obj_align(resetBtn, LV_ALIGN_CENTER, 0, 70);
+
+    lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
+    styleButton(backBtn, 150, kButtonHeight);
+    lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
+}
+
+void AppController::onSettingsBrightnessChanged(lv_event_t* e) {
+    const int32_t value = lv_slider_get_value(static_cast<lv_obj_t*>(lv_event_get_target(e)));
+    s_instance->brightnessPercent_ = static_cast<int>(value);
+    lv_label_set_text_fmt(s_instance->settingsBrightnessLabel_, "%d%%", value);
+    s_instance->applyBrightness();
+}
+
+void AppController::applyBrightness() {
+    const uint8_t raw = static_cast<uint8_t>((brightnessPercent_ * 255) / 100);
+    if (brightnessSetter_ != nullptr) {
+        brightnessSetter_(raw);
+    }
+    storage_.saveBrightness(raw);
+}
+
+void AppController::onSettingsResetRequested(lv_event_t*) {
+    s_instance->showResetConfirm();
+}
+
+void AppController::showResetConfirm() {
+    if (resetConfirmOverlay_ != nullptr) return;
+
+    resetConfirmOverlay_ = lv_obj_create(lv_scr_act());
+    lv_obj_remove_style_all(resetConfirmOverlay_);
+    lv_obj_set_size(resetConfirmOverlay_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(resetConfirmOverlay_, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(resetConfirmOverlay_, LV_OPA_50, 0);
+    lv_obj_clear_flag(resetConfirmOverlay_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(resetConfirmOverlay_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(resetConfirmOverlay_, onResetConfirmCancel, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t* panel = lv_obj_create(resetConfirmOverlay_);
+    stylePanel(panel);
+    lv_obj_set_size(panel, 280, 220);
+    lv_obj_center(panel);
+    lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t* label = lv_label_create(panel);
+    lv_label_set_text(label, "Delete all saved games\nand reset settings?");
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    styleBodyLabel(label);
+
+    lv_obj_t* confirmBtn = addButton(panel, "Yes, Reset", onResetConfirmYes);
+    styleButton(confirmBtn, 220, 56);
+    lv_obj_set_style_bg_color(confirmBtn, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_bg_color(confirmBtn, lv_palette_darken(LV_PALETTE_RED, 2), LV_STATE_PRESSED);
+
+    lv_obj_t* cancelBtn = addButton(panel, "Cancel", onResetConfirmCancel);
+    styleButton(cancelBtn, 220, 56);
+}
+
+void AppController::closeResetConfirm() {
+    if (resetConfirmOverlay_ != nullptr) {
+        lv_obj_del(resetConfirmOverlay_);
+        resetConfirmOverlay_ = nullptr;
+    }
+}
+
+void AppController::onResetConfirmYes(lv_event_t*) {
+    s_instance->closeResetConfirm();
+    s_instance->resetUserData();
+}
+
+void AppController::onResetConfirmCancel(lv_event_t*) {
+    s_instance->closeResetConfirm();
+}
+
+void AppController::resetUserData() {
+    storage_.resetAll();
+    history_.clear();
+    currentGame_.reset();
+    hasInProgressGame_ = false;
+    brightnessPercent_ = kDefaultBrightnessPercent;
+    applyBrightness();
+    showMenu();
 }
 
 }  // namespace bowls

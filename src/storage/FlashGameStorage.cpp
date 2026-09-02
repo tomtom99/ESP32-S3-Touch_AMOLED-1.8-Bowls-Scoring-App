@@ -154,4 +154,38 @@ bool FlashGameStorage::clearInProgress() {
     return !LittleFS.exists(inProgressPath_) || LittleFS.remove(inProgressPath_);
 }
 
+bool FlashGameStorage::loadBrightness(uint8_t& brightness) {
+    if (!LittleFS.exists(settingsPath_)) {
+        return false;
+    }
+
+    File file = LittleFS.open(settingsPath_, "r");
+    if (!file) return false;
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    if (err || !doc["brightness"].is<int>()) return false;
+
+    brightness = static_cast<uint8_t>(doc["brightness"].as<int>());
+    return true;
+}
+
+bool FlashGameStorage::saveBrightness(uint8_t brightness) {
+    JsonDocument doc;
+    doc["brightness"] = brightness;
+    File file = LittleFS.open(settingsPath_, "w");
+    if (!file) return false;
+    serializeJson(doc, file);
+    file.close();
+    return true;
+}
+
+bool FlashGameStorage::resetAll() {
+    bool ok = true;
+    if (LittleFS.exists(path_)) ok &= LittleFS.remove(path_);
+    if (LittleFS.exists(inProgressPath_)) ok &= LittleFS.remove(inProgressPath_);
+    if (LittleFS.exists(settingsPath_)) ok &= LittleFS.remove(settingsPath_);
+    return ok;
+}
+
 }  // namespace bowls

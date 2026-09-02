@@ -29,8 +29,12 @@ namespace {
 Arduino_DataBus* g_bus = new Arduino_ESP32QSPI(
     LCD_CS /* CS */, LCD_SCLK /* SCK */, LCD_SDIO0 /* D0 */, LCD_SDIO1 /* D1 */,
     LCD_SDIO2 /* D2 */, LCD_SDIO3 /* D3 */);
-Arduino_GFX* g_gfx = new Arduino_CO5300(g_bus, -1 /* RST */, 0 /* rotation */,
-                                        false /* IPS */, LCD_WIDTH, LCD_HEIGHT);
+Arduino_CO5300* g_gfx = new Arduino_CO5300(g_bus, -1 /* RST */, 0 /* rotation */,
+                                           false /* IPS */, LCD_WIDTH, LCD_HEIGHT);
+
+void setDisplayBrightness(uint8_t brightness) {
+    g_gfx->setBrightness(brightness);
+}
 
 // --- Touch ---------------------------------------------------------------
 bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
@@ -132,6 +136,7 @@ void setup() {
 
     static bowls::AppController app(g_storage);
     g_app = &app;
+    g_app->setBrightnessSetter(setDisplayBrightness);
     g_app->begin();
 }
 
