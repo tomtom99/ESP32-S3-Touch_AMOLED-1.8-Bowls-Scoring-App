@@ -6,13 +6,13 @@ namespace bowls {
 
 namespace {
 
-constexpr lv_coord_t kButtonWidth = 150;
-constexpr lv_coord_t kButtonHeight = 56;
-constexpr lv_coord_t kMenuButtonWidth = 230;
-constexpr lv_coord_t kSetupButtonWidth = 160;
-constexpr lv_coord_t kSetupButtonHeight = 76;
-constexpr lv_coord_t kStartButtonWidth = 190;
-constexpr lv_coord_t kStartButtonHeight = 80;
+constexpr lv_coord_t kButtonWidth = 170;
+constexpr lv_coord_t kButtonHeight = 64;
+constexpr lv_coord_t kMenuButtonWidth = 330;
+constexpr lv_coord_t kSetupButtonWidth = 172;
+constexpr lv_coord_t kSetupButtonHeight = 92;
+constexpr lv_coord_t kStartButtonWidth = 210;
+constexpr lv_coord_t kStartButtonHeight = 86;
 
 // "Slide to record"/"Swipe to end game" controls only count as a deliberate
 // swipe (rather than a stray tap landing far enough along the track to look
@@ -27,7 +27,9 @@ constexpr int32_t kRecordThreshold = 85;
 
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_pad_all(obj, 12, 0);
+    lv_obj_set_style_pad_all(obj, 8, 0);
+    lv_obj_set_style_bg_color(obj, lv_color_white(), 0);
+    lv_obj_set_style_text_color(obj, lv_color_black(), 0);
 }
 
 void stylePanel(lv_obj_t* obj) {
@@ -35,17 +37,27 @@ void stylePanel(lv_obj_t* obj) {
     lv_obj_set_style_pad_all(obj, 8, 0);
     lv_obj_set_style_pad_row(obj, 8, 0);
     lv_obj_set_style_pad_column(obj, 8, 0);
+    lv_obj_set_style_bg_color(obj, lv_palette_lighten(LV_PALETTE_GREY, 4), 0);
+    lv_obj_set_style_border_color(obj, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_set_style_text_color(obj, lv_color_black(), 0);
 }
 
 void styleButton(lv_obj_t* btn, lv_coord_t width = kButtonWidth, lv_coord_t height = kButtonHeight) {
     lv_obj_set_size(btn, width, height);
-    lv_obj_set_style_radius(btn, 12, 0);
+    lv_obj_set_style_radius(btn, 8, 0);
     lv_obj_set_style_pad_all(btn, 8, 0);
     lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(btn, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREY), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_palette_darken(LV_PALETTE_GREY, 1), LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(btn, lv_palette_darken(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_border_width(btn, 2, 0);
 }
 
 void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label, lv_color_black(), 0);
 }
 
 // Fills buf with the display text for a given slider position, where
@@ -59,13 +71,6 @@ void sliderValueText(char* buf, size_t bufSize, int32_t value, int32_t center) {
         std::snprintf(buf, bufSize, "%ld %s", static_cast<long>(diff > 0 ? diff : -diff),
                       diff > 0 ? "UP" : "DOWN");
     }
-}
-
-// Colour-codes the slider label so the direction is obvious at a glance.
-lv_color_t sliderValueColor(int32_t value, int32_t center) {
-    if (value > center) return lv_palette_main(LV_PALETTE_GREEN);
-    if (value < center) return lv_palette_main(LV_PALETTE_RED);
-    return lv_palette_main(LV_PALETTE_GREY);
 }
 
 }  // namespace
@@ -96,6 +101,7 @@ lv_obj_t* AppController::addTitle(lv_obj_t* parent, const char* text) {
     lv_obj_t* label = lv_label_create(parent);
     lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(label, lv_color_black(), 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     return label;
 }
@@ -119,12 +125,12 @@ void AppController::showMenu() {
     addTitle(screen, "Crown Green Bowls");
 
     lv_obj_t* newGameBtn = addButton(screen, "New Game", onMenuNewGame);
-    styleButton(newGameBtn, kMenuButtonWidth, 64);
-    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, -42);
+    styleButton(newGameBtn, kMenuButtonWidth, 86);
+    lv_obj_align(newGameBtn, LV_ALIGN_CENTER, 0, -54);
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
-    styleButton(historyBtn, kMenuButtonWidth, 64);
-    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, 42);
+    styleButton(historyBtn, kMenuButtonWidth, 86);
+    lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, 54);
 }
 
 void AppController::onMenuNewGame(lv_event_t*) {
@@ -151,7 +157,7 @@ void AppController::showNewGameSetup() {
 
     lv_obj_t* typeRow = lv_obj_create(screen);
     stylePanel(typeRow);
-    lv_obj_set_size(typeRow, LV_PCT(94), 100);
+    lv_obj_set_size(typeRow, LV_PCT(100), 116);
     lv_obj_align(typeRow, LV_ALIGN_CENTER, 0, -24);
     lv_obj_set_flex_flow(typeRow, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(typeRow, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
@@ -181,7 +187,7 @@ void AppController::showNewGameSetup() {
     lv_obj_align(startBtn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
-    styleButton(backBtn, 130, kButtonHeight);
+    styleButton(backBtn, 150, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
 }
 
@@ -231,8 +237,8 @@ void AppController::showScoring() {
     lv_obj_set_size(endGameSlider_, LV_PCT(100), 32);
     lv_obj_align(endGameSlider_, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_radius(endGameSlider_, 16, 0);
-    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_darken(LV_PALETTE_GREY, 3), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_main(LV_PALETTE_RED), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(endGameSlider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
     lv_obj_set_style_radius(endGameSlider_, 16, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(endGameSlider_, lv_color_white(), LV_PART_KNOB);
     lv_obj_set_style_radius(endGameSlider_, 14, LV_PART_KNOB);
@@ -242,6 +248,7 @@ void AppController::showScoring() {
 
     endGameSliderLabel_ = lv_label_create(endGameSlider_);
     lv_label_set_text(endGameSliderLabel_, "Swipe to End Game");
+    styleBodyLabel(endGameSliderLabel_);
     lv_obj_clear_flag(endGameSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(endGameSliderLabel_);
 
@@ -284,8 +291,8 @@ void AppController::showScoring() {
     lv_obj_set_size(recordSlider_, LV_PCT(92), 64);
     lv_obj_align(recordSlider_, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_radius(recordSlider_, 32, 0);
-    lv_obj_set_style_bg_color(recordSlider_, lv_palette_darken(LV_PALETTE_GREY, 3), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(recordSlider_, lv_palette_main(LV_PALETTE_GREEN), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(recordSlider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(recordSlider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
     lv_obj_set_style_radius(recordSlider_, 32, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(recordSlider_, lv_color_white(), LV_PART_KNOB);
     lv_obj_set_style_radius(recordSlider_, 28, LV_PART_KNOB);
@@ -308,7 +315,7 @@ void AppController::updateSliderLabel(int32_t value) {
     char buf[16];
     sliderValueText(buf, sizeof(buf), value, center);
     lv_label_set_text(sliderLabel_, buf);
-    lv_obj_set_style_text_color(sliderLabel_, sliderValueColor(value, center), 0);
+    lv_obj_set_style_text_color(sliderLabel_, lv_color_black(), 0);
 }
 
 void AppController::onSliderChanged(lv_event_t* e) {
@@ -489,7 +496,6 @@ void AppController::showEndMenu(int endIndex) {
 
     lv_obj_t* deleteBtn = addButton(panel, "Delete", onEndMenuDelete);
     styleButton(deleteBtn, 160, 48);
-    lv_obj_set_style_bg_color(deleteBtn, lv_palette_main(LV_PALETTE_RED), 0);
 
     lv_obj_t* cancelBtn = addButton(panel, "Cancel", onEndMenuCancel);
     styleButton(cancelBtn, 160, 48);
@@ -556,6 +562,8 @@ void AppController::showHistoryList() {
     lv_obj_set_size(list, LV_PCT(94), LV_PCT(74));
     lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 60);
     lv_obj_set_style_text_font(list, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(list, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(list, lv_color_white(), 0);
 
     for (size_t i = 0; i < history_.count(); ++i) {
         const BowlsGame& game = history_.at(i);
@@ -565,14 +573,17 @@ void AppController::showHistoryList() {
                       game.team2().playerNames.empty() ? "" : game.team2().playerNames[0].c_str(),
                       game.team1().score, game.team2().score);
         lv_obj_t* btn = lv_list_add_btn(list, nullptr, text);
-        lv_obj_set_height(btn, 56);
+        lv_obj_set_height(btn, 64);
         lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(btn, lv_color_black(), 0);
+        lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREY, 3), 0);
+        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREY), LV_STATE_PRESSED);
         lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_PRESSED, nullptr);
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
     }
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
-    styleButton(backBtn, 130, kButtonHeight);
+    styleButton(backBtn, 150, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
 }
 
@@ -603,7 +614,7 @@ void AppController::showHistoryDetail(size_t index) {
     lv_obj_align(summary, LV_ALIGN_TOP_MID, 0, 68);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onMenuHistory);
-    styleButton(backBtn, 130, kButtonHeight);
+    styleButton(backBtn, 150, kButtonHeight);
     lv_obj_align(backBtn, LV_ALIGN_BOTTOM_MID, 0, -10);
 }
 
