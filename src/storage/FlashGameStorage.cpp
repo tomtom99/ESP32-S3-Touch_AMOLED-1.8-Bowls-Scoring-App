@@ -172,7 +172,47 @@ bool FlashGameStorage::loadBrightness(uint8_t& brightness) {
 
 bool FlashGameStorage::saveBrightness(uint8_t brightness) {
     JsonDocument doc;
+    if (LittleFS.exists(settingsPath_)) {
+        File existingFile = LittleFS.open(settingsPath_, "r");
+        if (existingFile) {
+            deserializeJson(doc, existingFile);
+            existingFile.close();
+        }
+    }
     doc["brightness"] = brightness;
+    File file = LittleFS.open(settingsPath_, "w");
+    if (!file) return false;
+    serializeJson(doc, file);
+    file.close();
+    return true;
+}
+
+bool FlashGameStorage::loadAudioVolume(uint8_t& volume) {
+    if (!LittleFS.exists(settingsPath_)) return false;
+
+    File file = LittleFS.open(settingsPath_, "r");
+    if (!file) return false;
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    if (err || !doc["audioVolume"].is<int>()) return false;
+
+    const int savedVolume = doc["audioVolume"].as<int>();
+    if (savedVolume < 0 || savedVolume > 100) return false;
+    volume = static_cast<uint8_t>(savedVolume);
+    return true;
+}
+
+bool FlashGameStorage::saveAudioVolume(uint8_t volume) {
+    JsonDocument doc;
+    if (LittleFS.exists(settingsPath_)) {
+        File existingFile = LittleFS.open(settingsPath_, "r");
+        if (existingFile) {
+            deserializeJson(doc, existingFile);
+            existingFile.close();
+        }
+    }
+    doc["audioVolume"] = volume > 100 ? 100 : volume;
     File file = LittleFS.open(settingsPath_, "w");
     if (!file) return false;
     serializeJson(doc, file);

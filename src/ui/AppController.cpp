@@ -29,6 +29,7 @@ constexpr int32_t kRecordThreshold = 85;
 // the screen becomes unreadable/unusable.
 constexpr int kMinBrightnessPercent = 10;
 constexpr int kDefaultBrightnessPercent = 80;
+constexpr int kDefaultAudioVolumePercent = 35;
 
 // How often the battery percentage label is refreshed.
 constexpr uint32_t kBatteryPollIntervalMs = 30000;
@@ -113,6 +114,14 @@ void AppController::setBatteryPercentGetter(int (*getter)()) {
     batteryPercentGetter_ = getter;
 }
 
+void AppController::setScoreAnnouncer(void (*announcer)(int homeScore, int awayScore, bool deadEnd)) {
+    scoreAnnouncer_ = announcer;
+}
+
+void AppController::setAudioVolumeSetter(void (*setter)(uint8_t volumePercent)) {
+    audioVolumeSetter_ = setter;
+}
+
 void AppController::begin() {
     storage_.load(history_);
     BowlsGame savedGame;
@@ -128,6 +137,14 @@ void AppController::begin() {
     }
     if (brightnessSetter_ != nullptr) {
         brightnessSetter_(static_cast<uint8_t>((brightnessPercent_ * 255) / 100));
+    }
+
+    uint8_t savedAudioVolume = 0;
+    if (storage_.loadAudioVolume(savedAudioVolume)) {
+        audioVolumePercent_ = savedAudioVolume;
+    }
+    if (audioVolumeSetter_ != nullptr) {
+        audioVolumeSetter_(static_cast<uint8_t>(audioVolumePercent_));
     }
 
     createBatteryLabel();
@@ -152,7 +169,7 @@ void AppController::createBatteryLabel() {
     lv_obj_t* layer = lv_layer_top();
     batteryLabel_ = lv_label_create(layer);
     lv_obj_set_style_text_font(batteryLabel_, &lv_font_montserrat_20, 0);
-    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -6, 6);
+    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -36, 6);
     lv_label_set_text(batteryLabel_, "");
 
     updateBatteryLabel();
@@ -184,7 +201,7 @@ void AppController::updateBatteryLabel() {
                                         : lv_palette_main(LV_PALETTE_RED);
     lv_obj_set_style_text_color(batteryLabel_, color, 0);
     lv_label_set_text(batteryLabel_, icon);
-    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -6, 6);
+    lv_obj_align(batteryLabel_, LV_ALIGN_TOP_RIGHT, -36, 6);
 }
 
 void AppController::onBatteryTimer(lv_timer_t* timer) {
@@ -231,14 +248,16 @@ void AppController::showMenu() {
     if (hasInProgressGame_) {
         lv_obj_t* continueBtn = addButton(screen, "Continue Game", onMenuContinue);
         styleButton(continueBtn, kMenuButtonWidth, 70);
-        styleForwardButton(continueBtn);
+        lv_obj_set_style_bg_color(continueBtn, lv_palette_lighten(LV_PALETTE_ORANGE, 3), 0);
+        lv_obj_set_style_bg_color(continueBtn, lv_palette_main(LV_PALETTE_ORANGE), LV_STATE_PRESSED);
         lv_obj_set_style_text_font(continueBtn, &lv_font_montserrat_28, 0);
         lv_obj_align(continueBtn, LV_ALIGN_CENTER, 0, 4);
     }
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
     styleButton(historyBtn, kMenuButtonWidth, 70);
-    styleForwardButton(historyBtn);
+    lv_obj_set_style_bg_color(historyBtn, lv_palette_lighten(LV_PALETTE_YELLOW, 3), 0);
+    lv_obj_set_style_bg_color(historyBtn, lv_palette_main(LV_PALETTE_YELLOW), LV_STATE_PRESSED);
     lv_obj_set_style_text_font(historyBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
 
@@ -266,7 +285,8 @@ void AppController::onMenuHistory(lv_event_t*) {
 
 void AppController::showNewGameSetup() {
     pendingType_ = GameType::Singles;
-    setupTypeSwitch_ = nullptr;
+    setupSinglesButton_ = nullptr;
+    setupDoublesButton_ = nullptr;
     setupWinningScoreSlider_ = nullptr;
     setupHomeHandicapSlider_ = nullptr;
     setupAwayHandicapSlider_ = nullptr;
@@ -278,22 +298,24 @@ void AppController::showNewGameSetup() {
     styleBodyLabel(subtitle);
     lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
 
-    lv_obj_t* singlesLabel = lv_label_create(screen);
-    lv_label_set_text(singlesLabel, "Singles");
-    lv_obj_set_style_text_font(singlesLabel, &lv_font_montserrat_28, 0);
-    lv_obj_align(singlesLabel, LV_ALIGN_CENTER, -104, -12);
+    setupSinglesButton_ = addButton(screen, "Singles", onSetupTypeChanged);
+    styleButton(setupSinglesButton_, 260, 64);
+    lv_obj_add_state(setupSinglesButton_, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_lighten(LV_PALETTE_GREEN, 3), 0);
+    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_main(LV_PALETTE_GREEN),
+                              LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_darken(LV_PALETTE_GREEN, 1),
+                              LV_STATE_PRESSED);
+    lv_obj_align(setupSinglesButton_, LV_ALIGN_TOP_MID, 0, 88);
 
-    setupTypeSwitch_ = lv_switch_create(screen);
-    lv_obj_set_size(setupTypeSwitch_, 92, 54);
-    lv_obj_align(setupTypeSwitch_, LV_ALIGN_CENTER, 0, -12);
-    lv_obj_set_style_bg_color(setupTypeSwitch_, lv_palette_lighten(LV_PALETTE_GREEN, 3),
-                              LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_add_event_cb(setupTypeSwitch_, onSetupTypeChanged, LV_EVENT_VALUE_CHANGED, nullptr);
-
-    lv_obj_t* doublesLabel = lv_label_create(screen);
-    lv_label_set_text(doublesLabel, "Doubles");
-    lv_obj_set_style_text_font(doublesLabel, &lv_font_montserrat_28, 0);
-    lv_obj_align(doublesLabel, LV_ALIGN_CENTER, 112, -12);
+    setupDoublesButton_ = addButton(screen, "Doubles", onSetupTypeChanged);
+    styleButton(setupDoublesButton_, 260, 64);
+    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_lighten(LV_PALETTE_BLUE, 3), 0);
+    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_main(LV_PALETTE_BLUE),
+                              LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_darken(LV_PALETTE_BLUE, 1),
+                              LV_STATE_PRESSED);
+    lv_obj_align(setupDoublesButton_, LV_ALIGN_TOP_MID, 0, 164);
 
     lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
     styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
@@ -306,14 +328,18 @@ void AppController::showNewGameSetup() {
 }
 
 void AppController::onSetupTypeChanged(lv_event_t* e) {
-    lv_obj_t* typeSwitch = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    s_instance->pendingType_ = lv_obj_has_state(typeSwitch, LV_STATE_CHECKED)
-                                  ? GameType::Doubles
-                                  : GameType::Singles;
+    lv_obj_t* selectedButton = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    const bool doublesSelected = selectedButton == s_instance->setupDoublesButton_;
+    s_instance->pendingType_ = doublesSelected ? GameType::Doubles : GameType::Singles;
+    lv_obj_add_state(selectedButton, LV_STATE_CHECKED);
+    lv_obj_clear_state(doublesSelected ? s_instance->setupSinglesButton_
+                                       : s_instance->setupDoublesButton_,
+                      LV_STATE_CHECKED);
 }
 
 void AppController::showWinningScoreSetup() {
-    setupTypeSwitch_ = nullptr;
+    setupSinglesButton_ = nullptr;
+    setupDoublesButton_ = nullptr;
     lv_obj_t* screen = createScreen();
     addTitle(screen, "Winning Score");
 
@@ -324,13 +350,13 @@ void AppController::showWinningScoreSetup() {
 
     setupWinningScoreSlider_ = lv_slider_create(screen);
     lv_slider_set_range(setupWinningScoreSlider_, 0, 2);
-    lv_slider_set_value(setupWinningScoreSlider_, 0, LV_ANIM_OFF);
+    lv_slider_set_value(setupWinningScoreSlider_, 2, LV_ANIM_OFF);
     lv_obj_set_size(setupWinningScoreSlider_, LV_PCT(88), 54);
     lv_obj_align(setupWinningScoreSlider_, LV_ALIGN_CENTER, 0, -26);
     lv_obj_add_event_cb(setupWinningScoreSlider_, onSetupWinningScoreChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
     setupWinningScoreLabel_ = lv_label_create(screen);
-    lv_label_set_text(setupWinningScoreLabel_, "11 points");
+    lv_label_set_text(setupWinningScoreLabel_, "21 points");
     lv_obj_set_style_text_font(setupWinningScoreLabel_, &lv_font_montserrat_32, 0);
     lv_obj_align(setupWinningScoreLabel_, LV_ALIGN_CENTER, 0, 38);
 
@@ -397,7 +423,7 @@ void AppController::onSetupHandicapChanged(lv_event_t* e) {
 }
 
 void AppController::onSetupNext(lv_event_t*) {
-    if (s_instance->setupTypeSwitch_ != nullptr) {
+    if (s_instance->setupSinglesButton_ != nullptr) {
         s_instance->showWinningScoreSetup();
     } else if (s_instance->setupWinningScoreSlider_ != nullptr) {
         s_instance->showHandicapSetup();
@@ -510,10 +536,10 @@ void AppController::updateSliderLabel(int32_t value) {
     if (awaitingEndConfirmation_) return;
     const int32_t center = currentGame_->maxPerEnd();
     char buf[16];
-    sliderValueText(buf, sizeof(buf), value, center);
+    sliderValueText(buf, sizeof(buf), center * 2 - value, center);
     lv_label_set_text(sliderLabel_, buf);
-    const lv_color_t color = value < center ? lv_palette_main(LV_PALETTE_RED)
-                                             : value > center ? lv_palette_main(LV_PALETTE_GREEN)
+    const lv_color_t color = value > center ? lv_palette_main(LV_PALETTE_RED)
+                                             : value < center ? lv_palette_main(LV_PALETTE_GREEN)
                                                               : lv_color_black();
     lv_obj_set_style_bg_color(slider_, color, LV_PART_INDICATOR);
     lv_obj_set_style_text_color(sliderLabel_, color, 0);
@@ -527,7 +553,7 @@ void AppController::onSliderChanged(lv_event_t* e) {
 void AppController::onRecordEnd(lv_event_t*) {
     const int32_t maxPerEnd = s_instance->currentGame_->maxPerEnd();
     const int32_t value = lv_slider_get_value(s_instance->slider_);
-    const int32_t diff = value - maxPerEnd;
+    const int32_t diff = maxPerEnd - value;
     const int team1Score = diff > 0 ? static_cast<int>(diff) : 0;
     const int team2Score = diff < 0 ? static_cast<int>(-diff) : 0;
 
@@ -590,18 +616,24 @@ void AppController::onEndGameSliderReleased(lv_event_t* e) {
 }
 
 void AppController::recordEnd(int team1Score, int team2Score) {
-    currentGame_->recordEnd(team1Score, team2Score);
+    if (!currentGame_->recordEnd(team1Score, team2Score)) return;
     refreshEndsTable();
     storage_.saveInProgress(*currentGame_);
+    if (scoreAnnouncer_ != nullptr) {
+        scoreAnnouncer_(currentGame_->team1().score, currentGame_->team2().score, false);
+    }
     if (currentGame_->hasReachedWinningScore()) {
         activateEndGameSlider();
     }
 }
 
 void AppController::recordDeadEnd() {
-    currentGame_->recordDeadEnd();
+    if (!currentGame_->recordDeadEnd()) return;
     refreshEndsTable();
     storage_.saveInProgress(*currentGame_);
+    if (scoreAnnouncer_ != nullptr) {
+        scoreAnnouncer_(currentGame_->team1().score, currentGame_->team2().score, true);
+    }
 }
 
 void AppController::activateEndGameSlider() {
@@ -946,11 +978,29 @@ void AppController::showSettings() {
     lv_label_set_text_fmt(settingsBrightnessLabel_, "%d%%", brightnessPercent_);
     lv_obj_align(settingsBrightnessLabel_, LV_ALIGN_TOP_MID, 0, 150);
 
+    lv_obj_t* audioLabel = lv_label_create(screen);
+    lv_label_set_text(audioLabel, "Score Announcement Volume");
+    styleBodyLabel(audioLabel);
+    lv_obj_align(audioLabel, LV_ALIGN_TOP_MID, 0, 184);
+
+    settingsAudioVolumeSlider_ = lv_slider_create(screen);
+    lv_slider_set_range(settingsAudioVolumeSlider_, 0, 100);
+    lv_slider_set_value(settingsAudioVolumeSlider_, audioVolumePercent_, LV_ANIM_OFF);
+    lv_obj_set_size(settingsAudioVolumeSlider_, LV_PCT(88), 40);
+    lv_obj_align(settingsAudioVolumeSlider_, LV_ALIGN_TOP_MID, 0, 222);
+    lv_obj_add_event_cb(settingsAudioVolumeSlider_, onSettingsAudioVolumeChanged,
+                        LV_EVENT_VALUE_CHANGED, nullptr);
+
+    settingsAudioVolumeLabel_ = lv_label_create(screen);
+    lv_obj_set_style_text_font(settingsAudioVolumeLabel_, &lv_font_montserrat_28, 0);
+    lv_label_set_text_fmt(settingsAudioVolumeLabel_, "%d%%", audioVolumePercent_);
+    lv_obj_align(settingsAudioVolumeLabel_, LV_ALIGN_TOP_MID, 0, 274);
+
     lv_obj_t* resetBtn = addButton(screen, "Reset User Data", onSettingsResetRequested);
     styleButton(resetBtn, kMenuButtonWidth, 64);
     lv_obj_set_style_bg_color(resetBtn, lv_palette_main(LV_PALETTE_RED), 0);
     lv_obj_set_style_bg_color(resetBtn, lv_palette_darken(LV_PALETTE_RED, 2), LV_STATE_PRESSED);
-    lv_obj_align(resetBtn, LV_ALIGN_CENTER, 0, 70);
+    lv_obj_align(resetBtn, LV_ALIGN_BOTTOM_MID, 0, -88);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
     styleButton(backBtn, 150, kButtonHeight);
@@ -970,6 +1020,20 @@ void AppController::applyBrightness() {
         brightnessSetter_(raw);
     }
     storage_.saveBrightness(raw);
+}
+
+void AppController::onSettingsAudioVolumeChanged(lv_event_t* e) {
+    const int32_t value = lv_slider_get_value(static_cast<lv_obj_t*>(lv_event_get_target(e)));
+    s_instance->audioVolumePercent_ = static_cast<int>(value);
+    lv_label_set_text_fmt(s_instance->settingsAudioVolumeLabel_, "%d%%", value);
+    s_instance->applyAudioVolume();
+}
+
+void AppController::applyAudioVolume() {
+    if (audioVolumeSetter_ != nullptr) {
+        audioVolumeSetter_(static_cast<uint8_t>(audioVolumePercent_));
+    }
+    storage_.saveAudioVolume(static_cast<uint8_t>(audioVolumePercent_));
 }
 
 void AppController::onSettingsResetRequested(lv_event_t*) {
@@ -1033,7 +1097,9 @@ void AppController::resetUserData() {
     currentGame_.reset();
     hasInProgressGame_ = false;
     brightnessPercent_ = kDefaultBrightnessPercent;
+    audioVolumePercent_ = kDefaultAudioVolumePercent;
     applyBrightness();
+    applyAudioVolume();
     showMenu();
 }
 

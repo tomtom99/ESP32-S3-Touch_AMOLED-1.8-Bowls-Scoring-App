@@ -20,6 +20,7 @@
 
 #include "config/BoardPins.h"
 #include "hal/BatteryMonitor.h"
+#include "hal/ScoreAnnouncer.h"
 #include "hal/TouchDriver.h"
 #include "storage/FlashGameStorage.h"
 #include "ui/AppController.h"
@@ -42,9 +43,18 @@ bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
 
 // --- Battery (onboard AXP2101 PMU, shares the touch/expander I2C bus) ------
 bowls::BatteryMonitor g_battery;
+bowls::ScoreAnnouncer g_scoreAnnouncer;
 
 int readBatteryPercent() {
     return g_battery.readPercent();
+}
+
+void announceScore(int homeScore, int awayScore, bool deadEnd) {
+    g_scoreAnnouncer.announceScore(homeScore, awayScore, deadEnd);
+}
+
+void setAudioVolume(uint8_t volumePercent) {
+    g_scoreAnnouncer.setVolumePercent(volumePercent);
 }
 
 // --- LVGL ------------------------------------------------------------------
@@ -128,6 +138,9 @@ void setup() {
     if (!g_battery.begin(Wire, TOUCH_IIC_SDA, TOUCH_IIC_SCL)) {
         Serial.println("Battery warning: failed to initialize the AXP2101 PMU.");
     }
+    if (!g_scoreAnnouncer.begin(Wire, TOUCH_IIC_SDA, TOUCH_IIC_SCL)) {
+        Serial.println("Audio warning: failed to initialize the ES8311 codec.");
+    }
 
     g_storage.begin();
 
@@ -150,6 +163,8 @@ void setup() {
     g_app = &app;
     g_app->setBrightnessSetter(setDisplayBrightness);
     g_app->setBatteryPercentGetter(readBatteryPercent);
+    g_app->setScoreAnnouncer(announceScore);
+    g_app->setAudioVolumeSetter(setAudioVolume);
     g_app->begin();
 }
 

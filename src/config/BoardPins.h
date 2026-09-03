@@ -25,3 +25,4 @@
 #define I2S_DI_IO 10
 #define I2S_WS_IO 45
 #define I2S_DO_IO 8
+#define AUDIO_PA_ENABLE 46

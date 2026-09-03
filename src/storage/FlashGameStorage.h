@@ -23,6 +23,8 @@ public:
     bool clearInProgress() override;
     bool loadBrightness(uint8_t& brightness) override;
     bool saveBrightness(uint8_t brightness) override;
+    bool loadAudioVolume(uint8_t& volume) override;
+    bool saveAudioVolume(uint8_t volume) override;
     bool resetAll() override;
 
 private:

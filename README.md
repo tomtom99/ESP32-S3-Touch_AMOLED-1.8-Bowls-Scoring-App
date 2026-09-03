@@ -38,6 +38,9 @@ This project uses [PlatformIO](https://platformio.org/).
 # Build and flash the firmware to the board
 pio run -e waveshare-esp32s3-amoled -t upload
 
+# Upload the prerecorded score announcements in data/audio/ to LittleFS
+pio run -e waveshare-esp32s3-amoled -t uploadfs
+
 # Run the core game-logic unit tests on your host machine (no hardware needed)
 pio test -e native
 ```

@@ -28,6 +28,9 @@ public:
     // shown in the top-right corner of every screen.
     void setBatteryPercentGetter(int (*getter)());
 
+    void setScoreAnnouncer(void (*announcer)(int homeScore, int awayScore, bool deadEnd));
+    void setAudioVolumeSetter(void (*setter)(uint8_t volumePercent));
+
     // Loads any saved history from storage and shows the main menu.
     void begin();
 
@@ -51,6 +54,7 @@ private:
     void updateSliderLabel(int32_t value);
     void activateEndGameSlider();
     void applyBrightness();
+    void applyAudioVolume();
     void resetUserData();
 
     // Battery indicator (top-right, drawn on the LVGL top layer so it
@@ -104,6 +108,7 @@ private:
     static void onHistoryItemClicked(lv_event_t* e);
     static void onMenuSettings(lv_event_t* e);
     static void onSettingsBrightnessChanged(lv_event_t* e);
+    static void onSettingsAudioVolumeChanged(lv_event_t* e);
     static void onSettingsResetRequested(lv_event_t* e);
     static void onResetConfirmYes(lv_event_t* e);
     static void onResetConfirmCancel(lv_event_t* e);
@@ -114,13 +119,14 @@ private:
     GameHistory history_;
     std::unique_ptr<BowlsGame> currentGame_;
     GameType pendingType_ = GameType::Singles;
-    int pendingWinningScore_ = 11;
+    int pendingWinningScore_ = 21;
     int pendingHomeHandicap_ = 0;
     int pendingAwayHandicap_ = 0;
     bool hasInProgressGame_ = false;
     bool awaitingEndConfirmation_ = false;
 
-    lv_obj_t* setupTypeSwitch_ = nullptr;
+    lv_obj_t* setupSinglesButton_ = nullptr;
+    lv_obj_t* setupDoublesButton_ = nullptr;
     lv_obj_t* setupWinningScoreSlider_ = nullptr;
     lv_obj_t* setupHomeHandicapSlider_ = nullptr;
     lv_obj_t* setupAwayHandicapSlider_ = nullptr;
@@ -155,12 +161,18 @@ private:
     // Settings screen.
     lv_obj_t* settingsBrightnessSlider_ = nullptr;
     lv_obj_t* settingsBrightnessLabel_ = nullptr;
+    lv_obj_t* settingsAudioVolumeSlider_ = nullptr;
+    lv_obj_t* settingsAudioVolumeLabel_ = nullptr;
     int brightnessPercent_ = 80;
+    int audioVolumePercent_ = 35;
     void (*brightnessSetter_)(uint8_t) = nullptr;
+    void (*audioVolumeSetter_)(uint8_t volumePercent) = nullptr;
 
     // Battery percentage indicator.
     lv_obj_t* batteryLabel_ = nullptr;
     int (*batteryPercentGetter_)() = nullptr;
+
+    void (*scoreAnnouncer_)(int homeScore, int awayScore, bool deadEnd) = nullptr;
 
     // "Are you sure?" overlay shown before resetting all saved data.
     lv_obj_t* resetConfirmOverlay_ = nullptr;

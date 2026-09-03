@@ -32,6 +32,11 @@ public:
     virtual bool loadBrightness(uint8_t& brightness) = 0;
     virtual bool saveBrightness(uint8_t brightness) = 0;
 
+    // Loads/saves the announcement volume as a percentage (0-100).
+    // A false result from loadAudioVolume() means no value has been saved yet.
+    virtual bool loadAudioVolume(uint8_t& volume) = 0;
+    virtual bool saveAudioVolume(uint8_t volume) = 0;
+
     // Wipes all persisted data: history, in-progress game and settings.
     virtual bool resetAll() = 0;
 };
