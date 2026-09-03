@@ -14,7 +14,7 @@
 #define LCD_WIDTH 368
 #define LCD_HEIGHT 448
 
-// --- Touch (I2C, CST820/FT3168 controller) ---------------------------------
+// --- Touch (I2C, FT3168 controller) -----------------------------------------
 #define TOUCH_IIC_SDA 15
 #define TOUCH_IIC_SCL 14
 #define TOUCH_INT 21
@@ -25,3 +25,4 @@
 #define I2S_DI_IO 10
 #define I2S_WS_IO 45
 #define I2S_DO_IO 8
+#define AUDIO_PA_ENABLE 46

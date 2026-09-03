@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "core/GameHistory.h"
 
 namespace bowls {
@@ -17,6 +19,26 @@ public:
     // Persists the full contents of history to storage, overwriting
     // whatever was previously saved.
     virtual bool save(const GameHistory& history) = 0;
+
+    // Loads, saves, and clears the single game that has not been completed
+    // yet. A false result from loadInProgress() means there is no game to
+    // resume or that it could not be read.
+    virtual bool loadInProgress(BowlsGame& game) = 0;
+    virtual bool saveInProgress(const BowlsGame& game) = 0;
+    virtual bool clearInProgress() = 0;
+
+    // Loads/saves the display brightness (0-255). A false result from
+    // loadBrightness() means no value has been saved yet.
+    virtual bool loadBrightness(uint8_t& brightness) = 0;
+    virtual bool saveBrightness(uint8_t brightness) = 0;
+
+    // Loads/saves the announcement volume as a percentage (0-100).
+    // A false result from loadAudioVolume() means no value has been saved yet.
+    virtual bool loadAudioVolume(uint8_t& volume) = 0;
+    virtual bool saveAudioVolume(uint8_t volume) = 0;
+
+    // Wipes all persisted data: history, in-progress game and settings.
+    virtual bool resetAll() = 0;
 };
 
 }  // namespace bowls

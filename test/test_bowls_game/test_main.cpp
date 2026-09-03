@@ -45,6 +45,30 @@ static void test_finish_prevents_further_scoring(void) {
     TEST_ASSERT_EQUAL_STRING("Team 1 won", g.resultSummary().c_str());
 }
 
+static void test_dead_end_scores_nothing(void) {
+    BowlsGame g(GameType::Singles, {"Alice"}, {"Bob"});
+    g.recordEnd(1, 0);
+    TEST_ASSERT_TRUE(g.recordDeadEnd());
+    TEST_ASSERT_EQUAL_INT(1, g.team1().score);
+    TEST_ASSERT_EQUAL_INT(0, g.team2().score);
+    TEST_ASSERT_EQUAL_INT(2, g.endCount());
+    TEST_ASSERT_TRUE(g.undoLastEnd());
+    TEST_ASSERT_EQUAL_INT(1, g.endCount());
+}
+
+static void test_handicaps_and_winning_score(void) {
+    BowlsGame g(GameType::Singles, {"Alice"}, {"Bob"}, 0, 11, 3, 1);
+    TEST_ASSERT_EQUAL_INT(11, g.winningScore());
+    TEST_ASSERT_EQUAL_INT(3, g.team1().score);
+    TEST_ASSERT_EQUAL_INT(1, g.team2().score);
+    TEST_ASSERT_FALSE(g.hasReachedWinningScore());
+    TEST_ASSERT_TRUE(g.recordEnd(2, 0));
+    TEST_ASSERT_TRUE(g.recordEnd(2, 0));
+    TEST_ASSERT_TRUE(g.recordEnd(2, 0));
+    TEST_ASSERT_TRUE(g.recordEnd(2, 0));
+    TEST_ASSERT_TRUE(g.hasReachedWinningScore());
+}
+
 static void test_game_history_orders_most_recent_first(void) {
     GameHistory history;
     BowlsGame g1(GameType::Singles, {"A"}, {"B"}, 1);
@@ -70,6 +94,8 @@ int main(int argc, char** argv) {
     RUN_TEST(test_doubles_max_per_end);
     RUN_TEST(test_undo_last_end);
     RUN_TEST(test_finish_prevents_further_scoring);
+    RUN_TEST(test_dead_end_scores_nothing);
+    RUN_TEST(test_handicaps_and_winning_score);
     RUN_TEST(test_game_history_orders_most_recent_first);
     return UNITY_END();
 }

@@ -15,9 +15,12 @@
 
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
+#include <Wire.h>
 #include <lvgl.h>
 
 #include "config/BoardPins.h"
+#include "hal/BatteryMonitor.h"
+#include "hal/ScoreAnnouncer.h"
 #include "hal/TouchDriver.h"
 #include "storage/FlashGameStorage.h"
 #include "ui/AppController.h"
@@ -28,18 +31,63 @@ namespace {
 Arduino_DataBus* g_bus = new Arduino_ESP32QSPI(
     LCD_CS /* CS */, LCD_SCLK /* SCK */, LCD_SDIO0 /* D0 */, LCD_SDIO1 /* D1 */,
     LCD_SDIO2 /* D2 */, LCD_SDIO3 /* D3 */);
-Arduino_GFX* g_gfx = new Arduino_CO5300(g_bus, -1 /* RST */, 0 /* rotation */,
-                                        false /* IPS */, LCD_WIDTH, LCD_HEIGHT);
+Arduino_CO5300* g_gfx = new Arduino_CO5300(g_bus, -1 /* RST */, 0 /* rotation */,
+                                           false /* IPS */, LCD_WIDTH, LCD_HEIGHT);
+
+void setDisplayBrightness(uint8_t brightness) {
+    g_gfx->setBrightness(brightness);
+}
 
 // --- Touch ---------------------------------------------------------------
 bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
 
+// --- Battery (onboard AXP2101 PMU, shares the touch/expander I2C bus) ------
+bowls::BatteryMonitor g_battery;
+bowls::ScoreAnnouncer g_scoreAnnouncer;
+
+int readBatteryPercent() {
+    return g_battery.readPercent();
+}
+
+void announceScore(int homeScore, int awayScore, bool deadEnd) {
+    g_scoreAnnouncer.announceScore(homeScore, awayScore, deadEnd);
+}
+
+void setAudioVolume(uint8_t volumePercent) {
+    g_scoreAnnouncer.setVolumePercent(volumePercent);
+}
+
 // --- LVGL ------------------------------------------------------------------
 constexpr uint32_t kDrawBufLines = 40;
+constexpr uint8_t kIoExpanderAddress = 0x20;
+constexpr uint8_t kIoExpanderOutputRegister = 0x01;
+constexpr uint8_t kIoExpanderConfigRegister = 0x03;
+constexpr uint8_t kBoardEnablePinsMask = (1U << 0) | (1U << 1) | (1U << 2) | (1U << 6);
+constexpr uint8_t kBoardEnablePinsAsOutputs = static_cast<uint8_t>(~kBoardEnablePinsMask);
+
 lv_disp_draw_buf_t g_drawBuf;
 lv_color_t g_buf1[LCD_WIDTH * kDrawBufLines];
 lv_disp_drv_t g_dispDrv;
 lv_indev_drv_t g_indevDrv;
+
+bool writeIoExpanderRegister(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(kIoExpanderAddress);
+    Wire.write(reg);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+}
+
+bool initializeBoardPeripherals() {
+    if (!writeIoExpanderRegister(kIoExpanderOutputRegister, 0x00)) {
+        return false;
+    }
+    if (!writeIoExpanderRegister(kIoExpanderConfigRegister, kBoardEnablePinsAsOutputs)) {
+        return false;
+    }
+
+    delay(20);
+    return writeIoExpanderRegister(kIoExpanderOutputRegister, kBoardEnablePinsMask);
+}
 
 void lvglFlushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* colorP) {
     const uint32_t w = area->x2 - area->x1 + 1;
@@ -50,14 +98,20 @@ void lvglFlushCallback(lv_disp_drv_t* drv, const lv_area_t* area, lv_color_t* co
 
 void lvglTouchReadCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     (void)drv;
+    static int16_t lastX = 0;
+    static int16_t lastY = 0;
     int16_t x = 0;
     int16_t y = 0;
     if (g_touch.read(x, y)) {
+        lastX = x;
+        lastY = y;
         data->state = LV_INDEV_STATE_PRESSED;
         data->point.x = x;
         data->point.y = y;
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
+        data->point.x = lastX;
+        data->point.y = lastY;
     }
 }
 
@@ -70,10 +124,23 @@ bowls::AppController* g_app = nullptr;
 void setup() {
     Serial.begin(115200);
 
+    Wire.begin(TOUCH_IIC_SDA, TOUCH_IIC_SCL);
+    Wire.setClock(400000);
+    if (!initializeBoardPeripherals()) {
+        Serial.println("Board warning: failed to initialize the I/O expander.");
+    }
+
     g_gfx->begin();
     g_gfx->fillScreen(BLACK);
 
     g_touch.begin();
+
+    if (!g_battery.begin(Wire, TOUCH_IIC_SDA, TOUCH_IIC_SCL)) {
+        Serial.println("Battery warning: failed to initialize the AXP2101 PMU.");
+    }
+    if (!g_scoreAnnouncer.begin(Wire, TOUCH_IIC_SDA, TOUCH_IIC_SCL)) {
+        Serial.println("Audio warning: failed to initialize the ES8311 codec.");
+    }
 
     g_storage.begin();
 
@@ -94,6 +161,10 @@ void setup() {
 
     static bowls::AppController app(g_storage);
     g_app = &app;
+    g_app->setBrightnessSetter(setDisplayBrightness);
+    g_app->setBatteryPercentGetter(readBatteryPercent);
+    g_app->setScoreAnnouncer(announceScore);
+    g_app->setAudioVolumeSetter(setAudioVolume);
     g_app->begin();
 }
 

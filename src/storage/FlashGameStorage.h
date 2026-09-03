@@ -18,9 +18,19 @@ public:
 
     bool load(GameHistory& history) override;
     bool save(const GameHistory& history) override;
+    bool loadInProgress(BowlsGame& game) override;
+    bool saveInProgress(const BowlsGame& game) override;
+    bool clearInProgress() override;
+    bool loadBrightness(uint8_t& brightness) override;
+    bool saveBrightness(uint8_t brightness) override;
+    bool loadAudioVolume(uint8_t& volume) override;
+    bool saveAudioVolume(uint8_t volume) override;
+    bool resetAll() override;
 
 private:
     const char* path_;
+    const char* inProgressPath_ = "/current-game.json";
+    const char* settingsPath_ = "/settings.json";
 };
 
 }  // namespace bowls

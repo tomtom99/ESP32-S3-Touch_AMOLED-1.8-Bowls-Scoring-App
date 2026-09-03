@@ -25,6 +25,7 @@ int maxScorePerEnd(GameType type);
 struct Team {
     std::vector<std::string> playerNames;
     int score = 0;
+    int handicap = 0;
 };
 
 // The result recorded for one end of play. Only one side can win an end in
@@ -44,12 +45,17 @@ public:
     BowlsGame(GameType type,
               std::vector<std::string> team1Names,
               std::vector<std::string> team2Names,
-              uint32_t startTimestamp = 0);
+              uint32_t startTimestamp = 0,
+              int winningScore = 21,
+              int team1Handicap = 0,
+              int team2Handicap = 0);
 
     GameType type() const { return type_; }
     const Team& team1() const { return team1_; }
     const Team& team2() const { return team2_; }
     int maxPerEnd() const { return maxScorePerEnd(type_); }
+    int winningScore() const { return winningScore_; }
+    bool hasReachedWinningScore() const;
     int endCount() const { return static_cast<int>(ends_.size()); }
     const std::vector<EndResult>& ends() const { return ends_; }
     uint32_t startTimestamp() const { return startTimestamp_; }
@@ -63,9 +69,27 @@ public:
     // game has already been finished.
     bool recordEnd(int team1Score, int team2Score);
 
+    // Records a "dead end" (jack knocked out, end replayed) - no score for
+    // either side, but it still shows up in the ends table. Returns false
+    // if the game has already been finished.
+    bool recordDeadEnd();
+
     // Removes the most recently recorded end, undoing its score. Returns
     // false if there are no ends to undo or the game is finished.
     bool undoLastEnd();
+
+    // Removes the end at the given index (not necessarily the last one),
+    // adjusting each side's total score accordingly. Returns false if index
+    // is out of range or the game has already been finished.
+    bool removeEnd(size_t index);
+
+    // Replaces the result of the end at the given index with a new result,
+    // adjusting each side's total score accordingly. Follows the same
+    // validation rules as recordEnd(), except that (0, 0) is allowed here
+    // to convert an end into a dead end. Returns false (leaving the end
+    // unchanged) if index is out of range, the game is finished, or the
+    // new scores are invalid.
+    bool editEnd(size_t index, int team1Score, int team2Score);
 
     // Marks the game as finished. After this, recordEnd() will fail.
     void finish(uint32_t endTimestamp = 0);
@@ -81,6 +105,7 @@ private:
     std::vector<EndResult> ends_;
     uint32_t startTimestamp_ = 0;
     uint32_t endTimestamp_ = 0;
+    int winningScore_ = 21;
     bool finished_ = false;
 };
 
