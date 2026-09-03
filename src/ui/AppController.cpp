@@ -93,8 +93,10 @@ void sliderValueText(char* buf, size_t bufSize, int32_t value, int32_t center) {
     if (diff == 0) {
         std::snprintf(buf, bufSize, "DEAD END");
     } else {
-        std::snprintf(buf, bufSize, "%ld %s", static_cast<long>(diff > 0 ? diff : -diff),
-                      diff > 0 ? "UP" : "DOWN");
+        const int32_t homeScore = diff > 0 ? diff : 0;
+        const int32_t awayScore = diff < 0 ? -diff : 0;
+        std::snprintf(buf, bufSize, "HOME %ld - %ld AWAY", static_cast<long>(homeScore),
+                      static_cast<long>(awayScore));
     }
 }
 
@@ -540,8 +542,12 @@ void AppController::updateSliderLabel(int32_t value) {
     lv_label_set_text(sliderLabel_, buf);
     const lv_color_t color = value > center ? lv_palette_main(LV_PALETTE_RED)
                                              : value < center ? lv_palette_main(LV_PALETTE_GREEN)
-                                                              : lv_color_black();
+                                                              : lv_palette_main(LV_PALETTE_GREY);
+    // Color both the indicator and the track so the whole bar reflects the
+    // outcome (e.g. fully grey on a dead end, fully green on a home win)
+    // rather than only the portion between the knob and one end.
     lv_obj_set_style_bg_color(slider_, color, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider_, color, LV_PART_MAIN);
     lv_obj_set_style_text_color(sliderLabel_, color, 0);
 }
 
