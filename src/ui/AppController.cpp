@@ -43,6 +43,47 @@ constexpr uint16_t kRecordHintDurationMs = 1200;
 // How long a just-recorded end's row stays highlighted in the ends table.
 constexpr uint32_t kNewEndHighlightMs = 1800;
 
+// ---------------------------------------------------------------------------
+// Palette: an "evening bowls green" theme - a deep green lawn gradient
+// behind warm cream cards/buttons, with gold titles and jewel-tone accents
+// for the various actions (green = go, blue = doubles, amber = in-progress/
+// sliders, gold = history, red = destructive).
+// ---------------------------------------------------------------------------
+const lv_color_t kBgTop = lv_color_hex(0x173d2c);
+const lv_color_t kBgBottom = lv_color_hex(0x081b12);
+
+const lv_color_t kCardTop = lv_color_hex(0xfbf6e8);
+const lv_color_t kCardBottom = lv_color_hex(0xecdfb8);
+const lv_color_t kCardBorder = lv_color_hex(0xc9b783);
+
+const lv_color_t kTextCream = lv_color_hex(0xf3ecd8);
+const lv_color_t kTextDark = lv_color_hex(0x25281f);
+const lv_color_t kGoldAccent = lv_color_hex(0xe8c874);
+
+const lv_color_t kBtnLight = lv_color_hex(0xf2e7c3);
+const lv_color_t kBtnBase = lv_color_hex(0xdcc78e);
+const lv_color_t kBtnDeep = lv_color_hex(0xb2965c);
+
+const lv_color_t kGreenLight = lv_color_hex(0x86d39c);
+const lv_color_t kGreenBase = lv_color_hex(0x3f9d63);
+const lv_color_t kGreenDeep = lv_color_hex(0x1f6b3f);
+
+const lv_color_t kBlueLight = lv_color_hex(0x8fcbf2);
+const lv_color_t kBlueBase = lv_color_hex(0x3d8fd1);
+const lv_color_t kBlueDeep = lv_color_hex(0x1d5f96);
+
+const lv_color_t kOrangeLight = lv_color_hex(0xffd39b);
+const lv_color_t kOrangeBase = lv_color_hex(0xf5a94a);
+const lv_color_t kOrangeDeep = lv_color_hex(0xc9781f);
+
+const lv_color_t kYellowLight = lv_color_hex(0xfff0a8);
+const lv_color_t kYellowBase = lv_color_hex(0xf0cd4d);
+const lv_color_t kYellowDeep = lv_color_hex(0xc4a022);
+
+const lv_color_t kRedLight = lv_color_hex(0xf29b93);
+const lv_color_t kRedBase = lv_color_hex(0xd9564b);
+const lv_color_t kRedDeep = lv_color_hex(0x8f241d);
+
 void animateRecordSliderHint(void* hint, int32_t progress) {
     lv_obj_t* hintLabel = static_cast<lv_obj_t*>(hint);
     lv_obj_t* slider = lv_obj_get_parent(hintLabel);
@@ -51,11 +92,31 @@ void animateRecordSliderHint(void* hint, int32_t progress) {
     lv_obj_align(hintLabel, LV_ALIGN_LEFT_MID, offset, 0);
 }
 
+// Deep green-to-near-black vertical gradient, evoking a lawn at dusk.
 void styleScreen(lv_obj_t* obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_all(obj, 8, 0);
-    lv_obj_set_style_bg_color(obj, lv_color_white(), 0);
-    lv_obj_set_style_text_color(obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(obj, kBgTop, 0);
+    lv_obj_set_style_bg_grad_color(obj, kBgBottom, 0);
+    lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_text_color(obj, kTextCream, 0);
+}
+
+// Shared rounded-card visuals (gradient fill, soft border + drop shadow)
+// without touching scroll/padding flags, so both static panels and
+// scrollable table containers can reuse it.
+void styleCardVisuals(lv_obj_t* obj) {
+    lv_obj_set_style_radius(obj, 16, 0);
+    lv_obj_set_style_bg_color(obj, kCardTop, 0);
+    lv_obj_set_style_bg_grad_color(obj, kCardBottom, 0);
+    lv_obj_set_style_bg_grad_dir(obj, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_border_color(obj, kCardBorder, 0);
+    lv_obj_set_style_border_width(obj, 2, 0);
+    lv_obj_set_style_shadow_width(obj, 16, 0);
+    lv_obj_set_style_shadow_ofs_y(obj, 5, 0);
+    lv_obj_set_style_shadow_opa(obj, LV_OPA_40, 0);
+    lv_obj_set_style_shadow_color(obj, lv_color_black(), 0);
+    lv_obj_set_style_text_color(obj, kTextDark, 0);
 }
 
 void stylePanel(lv_obj_t* obj) {
@@ -63,40 +124,80 @@ void stylePanel(lv_obj_t* obj) {
     lv_obj_set_style_pad_all(obj, 8, 0);
     lv_obj_set_style_pad_row(obj, 8, 0);
     lv_obj_set_style_pad_column(obj, 8, 0);
-    lv_obj_set_style_bg_color(obj, lv_palette_lighten(LV_PALETTE_GREY, 4), 0);
-    lv_obj_set_style_border_color(obj, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_set_style_text_color(obj, lv_color_black(), 0);
+    styleCardVisuals(obj);
 }
 
 void styleButton(lv_obj_t* btn, lv_coord_t width = kButtonWidth, lv_coord_t height = kButtonHeight) {
     lv_obj_set_size(btn, width, height);
-    lv_obj_set_style_radius(btn, 8, 0);
+    lv_obj_set_style_radius(btn, 14, 0);
     lv_obj_set_style_pad_all(btn, 8, 0);
     lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(btn, lv_color_black(), 0);
-    lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
-    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREY), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(btn, lv_palette_darken(LV_PALETTE_GREY, 1), LV_STATE_CHECKED);
-    lv_obj_set_style_border_color(btn, lv_palette_darken(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_text_color(btn, kTextDark, 0);
+    lv_obj_set_style_bg_color(btn, kBtnLight, 0);
+    lv_obj_set_style_bg_grad_color(btn, kBtnBase, 0);
+    lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_color(btn, kBtnBase, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_grad_color(btn, kBtnDeep, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, kBtnDeep, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_grad_color(btn, kBtnDeep, LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(btn, kCardBorder, 0);
     lv_obj_set_style_border_width(btn, 2, 0);
+    lv_obj_set_style_shadow_width(btn, 10, 0);
+    lv_obj_set_style_shadow_ofs_y(btn, 4, 0);
+    lv_obj_set_style_shadow_opa(btn, LV_OPA_30, 0);
+    lv_obj_set_style_shadow_color(btn, lv_color_black(), 0);
+}
+
+// Recolors a button (base + pressed states) with a light-to-deep gradient
+// and a matching border, for the various accent actions across the app.
+void styleAccentButton(lv_obj_t* btn, lv_color_t light, lv_color_t deep, lv_color_t textColor) {
+    lv_obj_set_style_bg_color(btn, light, 0);
+    lv_obj_set_style_bg_grad_color(btn, deep, 0);
+    lv_obj_set_style_bg_color(btn, deep, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_grad_color(btn, deep, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, deep, 0);
+    lv_obj_set_style_text_color(btn, textColor, 0);
 }
 
 void styleForwardButton(lv_obj_t* btn) {
-    lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREEN, 3), 0);
-    lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREEN), LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn, lv_palette_darken(LV_PALETTE_GREEN, 2), 0);
+    styleAccentButton(btn, kGreenLight, kGreenBase, lv_color_white());
+    lv_obj_set_style_bg_color(btn, kGreenDeep, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_grad_color(btn, kGreenDeep, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, kGreenDeep, 0);
 }
 
 void stylePastelOrangeSlider(lv_obj_t* slider) {
-    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 5), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 2), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 3), LV_PART_KNOB);
-    lv_obj_set_style_border_color(slider, lv_palette_darken(LV_PALETTE_ORANGE, 1), LV_PART_KNOB);
+    lv_obj_set_style_bg_color(slider, kBtnLight, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider, kOrangeLight, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_grad_color(slider, kOrangeDeep, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_grad_dir(slider, LV_GRAD_DIR_HOR, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
+    lv_obj_set_style_border_color(slider, kOrangeDeep, LV_PART_KNOB);
+    lv_obj_set_style_border_width(slider, 2, LV_PART_KNOB);
+    lv_obj_set_style_shadow_width(slider, 6, LV_PART_KNOB);
+    lv_obj_set_style_shadow_opa(slider, LV_OPA_40, LV_PART_KNOB);
 }
 
 void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(label, lv_color_black(), 0);
+    lv_obj_set_style_text_color(label, kTextCream, 0);
+}
+
+// For labels placed on top of a cream card (rather than the dark screen
+// background) so they stay legible.
+void stylePanelLabel(lv_obj_t* label) {
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(label, kTextDark, 0);
+}
+
+// Styles a live/history ends table (and its scrollable container) with the
+// cream card look instead of the default theme's stark white.
+void styleEndsTable(lv_obj_t* table) {
+    lv_obj_set_style_bg_color(table, kCardTop, LV_PART_MAIN);
+    lv_obj_set_style_border_color(table, kCardBorder, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(table, kCardBottom, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(table, kCardBorder, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(table, kTextDark, LV_PART_ITEMS);
 }
 
 // Fills buf with the display text for a given slider position, where
@@ -231,8 +332,19 @@ lv_obj_t* AppController::addTitle(lv_obj_t* parent, const char* text) {
     lv_obj_t* label = lv_label_create(parent);
     lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(label, lv_color_black(), 0);
+    lv_obj_set_style_text_color(label, kGoldAccent, 0);
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+
+    // Small decorative gold underline beneath every screen title.
+    lv_obj_t* underline = lv_obj_create(parent);
+    lv_obj_remove_style_all(underline);
+    lv_obj_set_size(underline, 56, 4);
+    lv_obj_set_style_radius(underline, 2, 0);
+    lv_obj_set_style_bg_color(underline, kGoldAccent, 0);
+    lv_obj_set_style_bg_opa(underline, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(underline, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align_to(underline, label, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
+
     return label;
 }
 
@@ -252,6 +364,29 @@ lv_obj_t* AppController::addButton(lv_obj_t* parent, const char* text, lv_event_
 
 void AppController::showMenu() {
     lv_obj_t* screen = createScreen();
+
+    // Soft glowing orbs in the background, purely decorative, evoking bowls
+    // resting on the green.
+    lv_obj_t* decorA = lv_obj_create(screen);
+    lv_obj_remove_style_all(decorA);
+    lv_obj_set_size(decorA, 240, 240);
+    lv_obj_set_style_radius(decorA, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(decorA, kGreenBase, 0);
+    lv_obj_set_style_bg_opa(decorA, LV_OPA_20, 0);
+    lv_obj_clear_flag(decorA, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(decorA, LV_ALIGN_TOP_RIGHT, 110, -120);
+    lv_obj_move_background(decorA);
+
+    lv_obj_t* decorB = lv_obj_create(screen);
+    lv_obj_remove_style_all(decorB);
+    lv_obj_set_size(decorB, 160, 160);
+    lv_obj_set_style_radius(decorB, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(decorB, kGoldAccent, 0);
+    lv_obj_set_style_bg_opa(decorB, LV_OPA_10, 0);
+    lv_obj_clear_flag(decorB, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(decorB, LV_ALIGN_BOTTOM_LEFT, -70, 90);
+    lv_obj_move_background(decorB);
+
     lv_obj_t* title = addTitle(screen, "Crown Green Bowls");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_36, 0);
 
@@ -264,16 +399,14 @@ void AppController::showMenu() {
     if (hasInProgressGame_) {
         lv_obj_t* continueBtn = addButton(screen, "Continue Game", onMenuContinue);
         styleButton(continueBtn, kMenuButtonWidth, 70);
-        lv_obj_set_style_bg_color(continueBtn, lv_palette_lighten(LV_PALETTE_ORANGE, 3), 0);
-        lv_obj_set_style_bg_color(continueBtn, lv_palette_main(LV_PALETTE_ORANGE), LV_STATE_PRESSED);
+        styleAccentButton(continueBtn, kOrangeLight, kOrangeDeep, kTextDark);
         lv_obj_set_style_text_font(continueBtn, &lv_font_montserrat_28, 0);
         lv_obj_align(continueBtn, LV_ALIGN_CENTER, 0, 4);
     }
 
     lv_obj_t* historyBtn = addButton(screen, "View Old Scores", onMenuHistory);
     styleButton(historyBtn, kMenuButtonWidth, 70);
-    lv_obj_set_style_bg_color(historyBtn, lv_palette_lighten(LV_PALETTE_YELLOW, 3), 0);
-    lv_obj_set_style_bg_color(historyBtn, lv_palette_main(LV_PALETTE_YELLOW), LV_STATE_PRESSED);
+    styleAccentButton(historyBtn, kYellowLight, kYellowDeep, kTextDark);
     lv_obj_set_style_text_font(historyBtn, &lv_font_montserrat_28, 0);
     lv_obj_align(historyBtn, LV_ALIGN_CENTER, 0, hasInProgressGame_ ? 82 : 44);
 
@@ -318,21 +451,25 @@ void AppController::showNewGameSetup() {
     styleButton(setupSinglesButton_, LV_PCT(100), kButtonHeight * 2);
     lv_obj_set_style_text_font(setupSinglesButton_, &lv_font_montserrat_36, 0);
     lv_obj_add_state(setupSinglesButton_, LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_lighten(LV_PALETTE_GREEN, 3), 0);
-    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_main(LV_PALETTE_GREEN),
-                              LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_darken(LV_PALETTE_GREEN, 1),
-                              LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(setupSinglesButton_, kGreenLight, 0);
+    lv_obj_set_style_bg_grad_color(setupSinglesButton_, kGreenBase, 0);
+    lv_obj_set_style_bg_color(setupSinglesButton_, kGreenBase, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_grad_color(setupSinglesButton_, kGreenDeep, LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(setupSinglesButton_, lv_color_white(), LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(setupSinglesButton_, kGreenDeep, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(setupSinglesButton_, kGreenDeep, 0);
     lv_obj_align(setupSinglesButton_, LV_ALIGN_TOP_MID, 0, 88);
 
     setupDoublesButton_ = addButton(screen, "Doubles", onSetupTypeChanged);
     styleButton(setupDoublesButton_, LV_PCT(100), kButtonHeight * 2);
     lv_obj_set_style_text_font(setupDoublesButton_, &lv_font_montserrat_36, 0);
-    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_lighten(LV_PALETTE_BLUE, 3), 0);
-    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_main(LV_PALETTE_BLUE),
-                              LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_darken(LV_PALETTE_BLUE, 1),
-                              LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(setupDoublesButton_, kBlueLight, 0);
+    lv_obj_set_style_bg_grad_color(setupDoublesButton_, kBlueBase, 0);
+    lv_obj_set_style_bg_color(setupDoublesButton_, kBlueBase, LV_STATE_CHECKED);
+    lv_obj_set_style_bg_grad_color(setupDoublesButton_, kBlueDeep, LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(setupDoublesButton_, lv_color_white(), LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(setupDoublesButton_, kBlueDeep, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(setupDoublesButton_, kBlueDeep, 0);
     lv_obj_align(setupDoublesButton_, LV_ALIGN_TOP_MID, 0, 232);
 
     lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
@@ -483,6 +620,7 @@ void AppController::showScoring() {
     // Columns: Home score | Home total | End | Away score | Away total.
     // Long-pressing a row opens a menu to edit or delete that end.
     endsTableContainer_ = lv_obj_create(screen);
+    styleCardVisuals(endsTableContainer_);
     lv_obj_set_style_pad_all(endsTableContainer_, 0, 0);
     // Bottom padding gives scroll-to-bottom room so the last row clears fully.
     lv_obj_set_style_pad_bottom(endsTableContainer_, 8, 0);
@@ -491,6 +629,7 @@ void AppController::showScoring() {
     lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 80);
 
     endsTable_ = lv_table_create(endsTableContainer_);
+    styleEndsTable(endsTable_);
     lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
     lv_table_set_col_cnt(endsTable_, 5);
     lv_table_set_col_width(endsTable_, 0, 70);
@@ -522,10 +661,18 @@ void AppController::showScoring() {
     lv_obj_set_size(recordSlider_, kSliderWidth, 64);
     lv_obj_align(recordSlider_, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_set_style_radius(recordSlider_, 32, 0);
-    lv_obj_set_style_bg_color(recordSlider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(recordSlider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(recordSlider_, kBtnLight, LV_PART_MAIN);
+    lv_obj_set_style_bg_grad_color(recordSlider_, kBtnBase, LV_PART_MAIN);
+    lv_obj_set_style_bg_grad_dir(recordSlider_, LV_GRAD_DIR_VER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(recordSlider_, kGreenBase, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_grad_color(recordSlider_, kGreenDeep, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_grad_dir(recordSlider_, LV_GRAD_DIR_HOR, LV_PART_INDICATOR);
     lv_obj_set_style_radius(recordSlider_, 32, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(recordSlider_, lv_color_white(), LV_PART_KNOB);
+    lv_obj_set_style_border_color(recordSlider_, kGreenDeep, LV_PART_KNOB);
+    lv_obj_set_style_border_width(recordSlider_, 2, LV_PART_KNOB);
+    lv_obj_set_style_shadow_width(recordSlider_, 8, LV_PART_KNOB);
+    lv_obj_set_style_shadow_opa(recordSlider_, LV_OPA_40, LV_PART_KNOB);
     lv_obj_set_style_radius(recordSlider_, 28, LV_PART_KNOB);
     lv_obj_set_style_pad_all(recordSlider_, 4, LV_PART_KNOB);
     lv_obj_add_event_cb(recordSlider_, onRecordSliderPressed, LV_EVENT_PRESSED, nullptr);
@@ -534,14 +681,14 @@ void AppController::showScoring() {
     recordSliderLabel_ = lv_label_create(recordSlider_);
     lv_label_set_text(recordSliderLabel_, "RECORD END");
     lv_obj_set_style_text_font(recordSliderLabel_, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_text_color(recordSliderLabel_, lv_color_black(), 0);
+    lv_obj_set_style_text_color(recordSliderLabel_, kTextDark, 0);
     lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(recordSliderLabel_);
 
     recordSliderHint_ = lv_label_create(recordSlider_);
     lv_label_set_text(recordSliderHint_, ">>");
     lv_obj_set_style_text_font(recordSliderHint_, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_text_color(recordSliderHint_, lv_color_black(), 0);
+    lv_obj_set_style_text_color(recordSliderHint_, kTextDark, 0);
     lv_obj_clear_flag(recordSliderHint_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(recordSliderHint_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_align(recordSliderHint_, LV_ALIGN_LEFT_MID, 16, 0);
@@ -714,10 +861,11 @@ void AppController::activateEndGameSlider() {
     endGameSlider_ = slider_;
     lv_slider_set_range(slider_, 0, kRecordSliderMax);
     lv_slider_set_value(slider_, 0, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(slider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(slider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider_, kBtnLight, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider_, kOrangeBase, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_grad_color(slider_, kOrangeDeep, LV_PART_INDICATOR);
     lv_label_set_text(sliderLabel_, "Slide to End Game");
-    lv_obj_set_style_text_color(sliderLabel_, lv_color_black(), 0);
+    lv_obj_set_style_text_color(sliderLabel_, kGoldAccent, 0);
     lv_obj_add_event_cb(slider_, onEndGameSliderPressed, LV_EVENT_PRESSED, nullptr);
     lv_obj_add_event_cb(slider_, onEndGameSliderReleased, LV_EVENT_RELEASED, nullptr);
     lv_obj_add_flag(recordSlider_, LV_OBJ_FLAG_HIDDEN);
@@ -793,15 +941,25 @@ void AppController::onEndsTableDrawPart(lv_event_t* e) {
     const uint32_t row = dsc->id / colCnt;
     const uint32_t col = dsc->id % colCnt;
 
+    // Header row gets a solid green "scoreboard" band with cream text.
+    if (row == 0 && dsc->rect_dsc != nullptr) {
+        dsc->rect_dsc->bg_color = kGreenDeep;
+        dsc->rect_dsc->bg_opa = LV_OPA_COVER;
+    }
+
     // Tint the just-recorded end's row so new scores are obviously new;
     // startRowHighlight()/onHighlightTimeout() clear it again shortly after.
-    if (table == s_instance->endsTable_ && static_cast<int>(row) == s_instance->highlightedRow_ &&
-        dsc->rect_dsc != nullptr) {
-        dsc->rect_dsc->bg_color = lv_palette_lighten(LV_PALETTE_GREEN, 3);
+    if (row != 0 && table == s_instance->endsTable_ &&
+        static_cast<int>(row) == s_instance->highlightedRow_ && dsc->rect_dsc != nullptr) {
+        dsc->rect_dsc->bg_color = kGreenLight;
         dsc->rect_dsc->bg_opa = LV_OPA_COVER;
     }
 
     if (dsc->label_dsc == nullptr) return;
+
+    if (row == 0) {
+        dsc->label_dsc->color = kTextCream;
+    }
 
     // Score/total columns (0, 1, 3, 4) get the largest available font; the
     // header row and the small end-number column stay at the default size.
@@ -846,13 +1004,14 @@ void AppController::showEndMenu(int endIndex) {
 
     lv_obj_t* titleLabel = lv_label_create(panel);
     lv_label_set_text_fmt(titleLabel, "End %d", endIndex + 1);
-    styleBodyLabel(titleLabel);
+    stylePanelLabel(titleLabel);
 
     lv_obj_t* editBtn = addButton(panel, "Edit", onEndMenuEdit);
     styleButton(editBtn, 160, 48);
 
     lv_obj_t* deleteBtn = addButton(panel, "Delete", onEndMenuDelete);
     styleButton(deleteBtn, 160, 48);
+    styleAccentButton(deleteBtn, kRedLight, kRedDeep, lv_color_white());
 
     lv_obj_t* cancelBtn = addButton(panel, "Cancel", onEndMenuCancel);
     styleButton(cancelBtn, 160, 48);
@@ -922,8 +1081,7 @@ void AppController::showHistoryList() {
     lv_obj_set_size(list, LV_PCT(94), LV_PCT(74));
     lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 60);
     lv_obj_set_style_text_font(list, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(list, lv_color_black(), 0);
-    lv_obj_set_style_bg_color(list, lv_color_white(), 0);
+    styleCardVisuals(list);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
 
@@ -937,9 +1095,7 @@ void AppController::showHistoryList() {
         lv_obj_t* btn = lv_list_add_btn(list, nullptr, text);
         lv_obj_set_height(btn, 64);
         lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_color(btn, lv_color_black(), 0);
-        lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_ORANGE, 3), 0);
-        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_ORANGE), LV_STATE_PRESSED);
+        styleAccentButton(btn, kOrangeLight, kOrangeDeep, kTextDark);
         lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_PRESSED, nullptr);
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(history_.count())));
     }
@@ -954,9 +1110,7 @@ void AppController::showHistoryList() {
         lv_obj_t* btn = lv_list_add_btn(list, nullptr, text);
         lv_obj_set_height(btn, 64);
         lv_obj_set_style_text_font(btn, &lv_font_montserrat_20, 0);
-        lv_obj_set_style_text_color(btn, lv_color_black(), 0);
-        lv_obj_set_style_bg_color(btn, lv_palette_lighten(LV_PALETTE_GREY, 3), 0);
-        lv_obj_set_style_bg_color(btn, lv_palette_main(LV_PALETTE_GREY), LV_STATE_PRESSED);
+        styleAccentButton(btn, kBtnLight, kBtnDeep, kTextDark);
         lv_obj_add_event_cb(btn, onHistoryItemClicked, LV_EVENT_PRESSED, nullptr);
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
     }
@@ -995,12 +1149,14 @@ void AppController::showHistoryDetail(size_t index) {
 
     // Scorecard: full end-by-end breakdown, matching the live scoring table.
     lv_obj_t* tableContainer = lv_obj_create(screen);
+    styleCardVisuals(tableContainer);
     lv_obj_set_style_pad_all(tableContainer, 0, 0);
     lv_obj_set_scroll_dir(tableContainer, LV_DIR_VER);
     lv_obj_set_size(tableContainer, LV_PCT(94), 190);
     lv_obj_align(tableContainer, LV_ALIGN_TOP_MID, 0, 150);
 
     lv_obj_t* table = lv_table_create(tableContainer);
+    styleEndsTable(table);
     lv_obj_set_style_text_font(table, &lv_font_montserrat_20, LV_PART_ITEMS);
     lv_table_set_col_cnt(table, 5);
     lv_table_set_col_width(table, 0, 70);
@@ -1083,8 +1239,7 @@ void AppController::showSettings() {
 
     lv_obj_t* resetBtn = addButton(screen, "Reset User Data", onSettingsResetRequested);
     styleButton(resetBtn, kMenuButtonWidth, 64);
-    lv_obj_set_style_bg_color(resetBtn, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_set_style_bg_color(resetBtn, lv_palette_darken(LV_PALETTE_RED, 2), LV_STATE_PRESSED);
+    styleAccentButton(resetBtn, kRedLight, kRedDeep, lv_color_white());
     lv_obj_align(resetBtn, LV_ALIGN_BOTTOM_MID, 0, -88);
 
     lv_obj_t* backBtn = addButton(screen, "Back", onBackToMenu);
@@ -1167,12 +1322,11 @@ void AppController::showResetConfirm() {
     lv_label_set_text(label, "Delete all saved games\nand reset settings?");
     lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-    styleBodyLabel(label);
+    stylePanelLabel(label);
 
     lv_obj_t* confirmBtn = addButton(panel, "Yes, Reset", onResetConfirmYes);
     styleButton(confirmBtn, 220, 56);
-    lv_obj_set_style_bg_color(confirmBtn, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_set_style_bg_color(confirmBtn, lv_palette_darken(LV_PALETTE_RED, 2), LV_STATE_PRESSED);
+    styleAccentButton(confirmBtn, kRedLight, kRedDeep, lv_color_white());
 
     lv_obj_t* cancelBtn = addButton(panel, "Cancel", onResetConfirmCancel);
     styleButton(cancelBtn, 220, 56);
