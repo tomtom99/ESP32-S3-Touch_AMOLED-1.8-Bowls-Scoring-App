@@ -34,6 +34,14 @@ public:
     // Loads any saved history from storage and shows the main menu.
     void begin();
 
+    // Dims the display to off without touching the saved brightness setting
+    // (used when the PWR button puts the screen to sleep).
+    void enterDisplaySleep();
+    // Restores the display to its saved brightness (used when the PWR
+    // button wakes the screen back up).
+    void exitDisplaySleep();
+    bool isDisplaySleeping() const { return displaySleeping_; }
+
 private:
     // --- Screen builders -------------------------------------------------
     void showMenu();
@@ -51,9 +59,16 @@ private:
     void recordDeadEnd();
     void endCurrentGame();
     void refreshEndsTable();
+    // Row index (accounting for the handicap row, if any) for a given end.
+    int endRowIndex(size_t endIndex) const;
+    // Flashes the given ends-table row with a highlight that fades away
+    // shortly after, to draw the eye to a just-recorded score.
+    void startRowHighlight(int row);
+    static void onHighlightTimeout(lv_timer_t* timer);
     void updateSliderLabel(int32_t value);
     void activateEndGameSlider();
     void applyBrightness();
+    void pushBrightnessToHardware();
     void applyAudioVolume();
     void resetUserData();
 
@@ -140,9 +155,15 @@ private:
     lv_obj_t* slider_ = nullptr;
     lv_obj_t* sliderLabel_ = nullptr;
 
+    // Table row (-1 = none) currently highlighted as a just-recorded end.
+    int highlightedRow_ = -1;
+    lv_timer_t* highlightTimer_ = nullptr;
+
     // "Slide to record" confirmation control at the bottom of the screen.
     lv_obj_t* recordSlider_ = nullptr;
     lv_obj_t* recordSliderLabel_ = nullptr;
+    lv_obj_t* recordSliderHint_ = nullptr;
+    bool recordSliderHintAnimationStarted_ = false;
     int32_t recordSliderPressX_ = 0;
 
     // "Swipe to end game" control across the top of the scoring screen.
@@ -167,6 +188,7 @@ private:
     int audioVolumePercent_ = 35;
     void (*brightnessSetter_)(uint8_t) = nullptr;
     void (*audioVolumeSetter_)(uint8_t volumePercent) = nullptr;
+    bool displaySleeping_ = false;
 
     // Battery percentage indicator.
     lv_obj_t* batteryLabel_ = nullptr;

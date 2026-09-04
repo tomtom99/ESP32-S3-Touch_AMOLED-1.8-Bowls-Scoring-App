@@ -45,6 +45,10 @@ bowls::TouchDriver g_touch(TOUCH_IIC_SDA, TOUCH_IIC_SCL, TOUCH_INT);
 bowls::BatteryMonitor g_battery;
 bowls::ScoreAnnouncer g_scoreAnnouncer;
 
+// Defined further below alongside storage; forward-declared here so the
+// touch/PWR-button callbacks above it can check the display sleep state.
+bowls::AppController* g_app = nullptr;
+
 int readBatteryPercent() {
     return g_battery.readPercent();
 }
@@ -102,6 +106,14 @@ void lvglTouchReadCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     static int16_t lastY = 0;
     int16_t x = 0;
     int16_t y = 0;
+    // Ignore touches while the display is asleep so nothing behind the
+    // dark screen reacts before the user wakes it back up.
+    if (g_app != nullptr && g_app->isDisplaySleeping()) {
+        data->state = LV_INDEV_STATE_RELEASED;
+        data->point.x = lastX;
+        data->point.y = lastY;
+        return;
+    }
     if (g_touch.read(x, y)) {
         lastX = x;
         lastY = y;
@@ -115,9 +127,57 @@ void lvglTouchReadCallback(lv_indev_drv_t* drv, lv_indev_data_t* data) {
     }
 }
 
+// --- PWR button (read via the shared I/O expander) --------------------------
+// The board's PWR button is wired to the TCA9554 I/O expander input port
+// rather than a plain ESP32 GPIO (per Waveshare's docs: "the action can be
+// judged by the high and low levels of the EXIO4 detection button... high
+// level is pressed"). A 6+ second hold powers the board off in hardware;
+// short presses are free for us to use here to toggle a software sleep mode
+// (dims the backlight and ignores touch) with two double-presses.
+constexpr uint8_t kIoExpanderInputRegister = 0x00;
+constexpr uint8_t kPwrButtonBit = 1U << 3;  // EXIO4 (1-indexed) -> bit 3
+constexpr uint32_t kPwrDoublePressWindowMs = 500;
+constexpr uint32_t kPwrDebounceMs = 40;
+
+bool readPwrButtonPressed() {
+    Wire.beginTransmission(kIoExpanderAddress);
+    Wire.write(kIoExpanderInputRegister);
+    if (Wire.endTransmission(false) != 0) return false;
+    if (Wire.requestFrom(static_cast<int>(kIoExpanderAddress), 1) != 1) return false;
+    const uint8_t value = Wire.read();
+    return (value & kPwrButtonBit) != 0;
+}
+
+void pollPwrButton() {
+    static bool lastPressed = false;
+    static uint32_t lastChangeMs = 0;
+    static uint32_t lastPressMs = 0;
+    static uint8_t pressCount = 0;
+
+    const uint32_t now = millis();
+    if ((now - lastChangeMs) < kPwrDebounceMs) return;
+
+    const bool pressed = readPwrButtonPressed();
+    if (pressed == lastPressed) return;
+    lastChangeMs = now;
+    lastPressed = pressed;
+    if (!pressed) return;  // only act on the press (rising) edge
+
+    pressCount = (now - lastPressMs <= kPwrDoublePressWindowMs) ? pressCount + 1 : 1;
+    lastPressMs = now;
+    if (pressCount < 2) return;
+    pressCount = 0;
+
+    if (g_app == nullptr) return;
+    if (g_app->isDisplaySleeping()) {
+        g_app->exitDisplaySleep();
+    } else {
+        g_app->enterDisplaySleep();
+    }
+}
+
 // --- Storage + app state ---------------------------------------------------
 bowls::FlashGameStorage g_storage;
-bowls::AppController* g_app = nullptr;
 
 }  // namespace
 
@@ -169,6 +229,7 @@ void setup() {
 }
 
 void loop() {
+    pollPwrButton();
     lv_timer_handler();
     delay(5);
 }

@@ -14,6 +14,10 @@ constexpr lv_coord_t kSetupButtonHeight = 92;
 constexpr lv_coord_t kStartButtonWidth = 210;
 constexpr lv_coord_t kStartButtonHeight = 86;
 
+// All sliders use this fixed width so they stop 40px short of each side of
+// the (368px-wide) screen instead of running edge-to-edge.
+constexpr lv_coord_t kSliderWidth = 288;
+
 // "Slide to record"/"Swipe to end game" controls only count as a deliberate
 // swipe (rather than a stray tap landing far enough along the track to look
 // like a completed drag) once the touch point has moved at least this many
@@ -35,6 +39,9 @@ constexpr int kDefaultAudioVolumePercent = 35;
 constexpr uint32_t kBatteryPollIntervalMs = 30000;
 
 constexpr uint16_t kRecordHintDurationMs = 1200;
+
+// How long a just-recorded end's row stays highlighted in the ends table.
+constexpr uint32_t kNewEndHighlightMs = 1800;
 
 void animateRecordSliderHint(void* hint, int32_t progress) {
     lv_obj_t* hintLabel = static_cast<lv_obj_t*>(hint);
@@ -301,7 +308,8 @@ void AppController::showNewGameSetup() {
     lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
 
     setupSinglesButton_ = addButton(screen, "Singles", onSetupTypeChanged);
-    styleButton(setupSinglesButton_, 260, 64);
+    styleButton(setupSinglesButton_, LV_PCT(100), kButtonHeight * 2);
+    lv_obj_set_style_text_font(setupSinglesButton_, &lv_font_montserrat_36, 0);
     lv_obj_add_state(setupSinglesButton_, LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_lighten(LV_PALETTE_GREEN, 3), 0);
     lv_obj_set_style_bg_color(setupSinglesButton_, lv_palette_main(LV_PALETTE_GREEN),
@@ -311,13 +319,14 @@ void AppController::showNewGameSetup() {
     lv_obj_align(setupSinglesButton_, LV_ALIGN_TOP_MID, 0, 88);
 
     setupDoublesButton_ = addButton(screen, "Doubles", onSetupTypeChanged);
-    styleButton(setupDoublesButton_, 260, 64);
+    styleButton(setupDoublesButton_, LV_PCT(100), kButtonHeight * 2);
+    lv_obj_set_style_text_font(setupDoublesButton_, &lv_font_montserrat_36, 0);
     lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_lighten(LV_PALETTE_BLUE, 3), 0);
     lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_main(LV_PALETTE_BLUE),
                               LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(setupDoublesButton_, lv_palette_darken(LV_PALETTE_BLUE, 1),
                               LV_STATE_PRESSED);
-    lv_obj_align(setupDoublesButton_, LV_ALIGN_TOP_MID, 0, 164);
+    lv_obj_align(setupDoublesButton_, LV_ALIGN_TOP_MID, 0, 232);
 
     lv_obj_t* nextBtn = addButton(screen, "Next", onSetupNext);
     styleButton(nextBtn, kStartButtonWidth, kButtonHeight);
@@ -353,7 +362,7 @@ void AppController::showWinningScoreSetup() {
     setupWinningScoreSlider_ = lv_slider_create(screen);
     lv_slider_set_range(setupWinningScoreSlider_, 0, 2);
     lv_slider_set_value(setupWinningScoreSlider_, 2, LV_ANIM_OFF);
-    lv_obj_set_size(setupWinningScoreSlider_, LV_PCT(88), 54);
+    lv_obj_set_size(setupWinningScoreSlider_, kSliderWidth, 54);
     lv_obj_align(setupWinningScoreSlider_, LV_ALIGN_CENTER, 0, -26);
     lv_obj_add_event_cb(setupWinningScoreSlider_, onSetupWinningScoreChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
@@ -389,7 +398,7 @@ void AppController::showHandicapSetup() {
     lv_obj_align(setupHomeHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 58);
     setupHomeHandicapSlider_ = lv_slider_create(screen);
     lv_slider_set_range(setupHomeHandicapSlider_, 0, 7);
-    lv_obj_set_size(setupHomeHandicapSlider_, LV_PCT(88), 36);
+    lv_obj_set_size(setupHomeHandicapSlider_, kSliderWidth, 36);
     lv_obj_align(setupHomeHandicapSlider_, LV_ALIGN_TOP_MID, 0, 90);
     lv_obj_add_event_cb(setupHomeHandicapSlider_, onSetupHandicapChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
@@ -399,7 +408,7 @@ void AppController::showHandicapSetup() {
     lv_obj_align(setupAwayHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 152);
     setupAwayHandicapSlider_ = lv_slider_create(screen);
     lv_slider_set_range(setupAwayHandicapSlider_, 0, 7);
-    lv_obj_set_size(setupAwayHandicapSlider_, LV_PCT(88), 36);
+    lv_obj_set_size(setupAwayHandicapSlider_, kSliderWidth, 36);
     lv_obj_align(setupAwayHandicapSlider_, LV_ALIGN_TOP_MID, 0, 184);
     lv_obj_add_event_cb(setupAwayHandicapSlider_, onSetupHandicapChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
@@ -451,6 +460,13 @@ void AppController::showScoring() {
     lv_obj_t* screen = createScreen();
     editingEndIndex_ = -1;
     awaitingEndConfirmation_ = currentGame_->hasReachedWinningScore();
+    recordSliderHint_ = nullptr;
+    recordSliderHintAnimationStarted_ = false;
+    if (highlightTimer_ != nullptr) {
+        lv_timer_del(highlightTimer_);
+        highlightTimer_ = nullptr;
+    }
+    highlightedRow_ = -1;
     const int32_t maxPerEnd = currentGame_->maxPerEnd();
 
     // Scrollable table of every end played so far, plus running totals.
@@ -462,7 +478,7 @@ void AppController::showScoring() {
     lv_obj_set_style_pad_bottom(endsTableContainer_, 8, 0);
     lv_obj_set_scroll_dir(endsTableContainer_, LV_DIR_VER);
     lv_obj_set_size(endsTableContainer_, LV_PCT(100), 250);
-    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(endsTableContainer_, LV_ALIGN_TOP_MID, 0, 80);
 
     endsTable_ = lv_table_create(endsTableContainer_);
     lv_obj_set_style_text_font(endsTable_, &lv_font_montserrat_20, LV_PART_ITEMS);
@@ -475,24 +491,25 @@ void AppController::showScoring() {
     lv_obj_add_event_cb(endsTable_, onEndsTableDrawPart, LV_EVENT_DRAW_PART_BEGIN, nullptr);
     lv_obj_add_event_cb(endsTable_, onEndsTableLongPressed, LV_EVENT_LONG_PRESSED, nullptr);
 
-    // Big, ever-visible slider for choosing the outcome of the current end.
-    // Range is 0..2*maxPerEnd so doubles games can score up to 4 up/4 down.
+    // Score text sits above the ever-visible slider used to choose the
+    // outcome of the current end. Range is 0..2*maxPerEnd so doubles games
+    // can score up to 4 up/4 down.
+    sliderLabel_ = lv_label_create(screen);
+    lv_obj_set_style_text_font(sliderLabel_, &lv_font_montserrat_32, 0);
+    lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 340);
+
     slider_ = lv_slider_create(screen);
     lv_slider_set_range(slider_, 0, maxPerEnd * 2);
     lv_slider_set_value(slider_, maxPerEnd, LV_ANIM_OFF);
-    lv_obj_set_size(slider_, LV_PCT(92), 40);
-    lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 268);
-
-    sliderLabel_ = lv_label_create(screen);
-    lv_obj_set_style_text_font(sliderLabel_, &lv_font_montserrat_32, 0);
-    lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 320);
+    lv_obj_set_size(slider_, kSliderWidth, 40);
+    lv_obj_align(slider_, LV_ALIGN_TOP_MID, 0, 392);
     lv_obj_add_event_cb(slider_, onSliderChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 
     recordSlider_ = lv_slider_create(screen);
     lv_slider_set_range(recordSlider_, 0, kRecordSliderMax);
     lv_slider_set_value(recordSlider_, 0, LV_ANIM_OFF);
-    lv_obj_set_size(recordSlider_, LV_PCT(92), 64);
-    lv_obj_align(recordSlider_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_size(recordSlider_, kSliderWidth, 64);
+    lv_obj_align(recordSlider_, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_set_style_radius(recordSlider_, 32, 0);
     lv_obj_set_style_bg_color(recordSlider_, lv_palette_lighten(LV_PALETTE_GREY, 2), LV_PART_MAIN);
     lv_obj_set_style_bg_color(recordSlider_, lv_palette_darken(LV_PALETTE_GREY, 1), LV_PART_INDICATOR);
@@ -505,26 +522,18 @@ void AppController::showScoring() {
 
     recordSliderLabel_ = lv_label_create(recordSlider_);
     lv_label_set_text(recordSliderLabel_, "RECORD END");
-    lv_obj_set_style_text_font(recordSliderLabel_, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(recordSliderLabel_, &lv_font_montserrat_32, 0);
     lv_obj_set_style_text_color(recordSliderLabel_, lv_color_black(), 0);
     lv_obj_clear_flag(recordSliderLabel_, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(recordSliderLabel_);
 
-    lv_obj_t* recordSliderHint = lv_label_create(recordSlider_);
-    lv_label_set_text(recordSliderHint, ">>");
-    lv_obj_set_style_text_font(recordSliderHint, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_text_color(recordSliderHint, lv_color_black(), 0);
-    lv_obj_clear_flag(recordSliderHint, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_align(recordSliderHint, LV_ALIGN_LEFT_MID, 16, 0);
-
-    lv_anim_t recordHintAnimation;
-    lv_anim_init(&recordHintAnimation);
-    lv_anim_set_var(&recordHintAnimation, recordSliderHint);
-    lv_anim_set_values(&recordHintAnimation, 0, 100);
-    lv_anim_set_time(&recordHintAnimation, kRecordHintDurationMs);
-    lv_anim_set_repeat_count(&recordHintAnimation, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_set_exec_cb(&recordHintAnimation, animateRecordSliderHint);
-    lv_anim_start(&recordHintAnimation);
+    recordSliderHint_ = lv_label_create(recordSlider_);
+    lv_label_set_text(recordSliderHint_, ">>");
+    lv_obj_set_style_text_font(recordSliderHint_, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_color(recordSliderHint_, lv_color_black(), 0);
+    lv_obj_clear_flag(recordSliderHint_, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(recordSliderHint_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_align(recordSliderHint_, LV_ALIGN_LEFT_MID, 16, 0);
 
     refreshEndsTable();
     if (awaitingEndConfirmation_) {
@@ -553,10 +562,29 @@ void AppController::updateSliderLabel(int32_t value) {
 
 void AppController::onSliderChanged(lv_event_t* e) {
     lv_obj_t* slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    s_instance->updateSliderLabel(lv_slider_get_value(slider));
+    const int32_t value = lv_slider_get_value(slider);
+    s_instance->updateSliderLabel(value);
+
+    if (!s_instance->recordSliderHintAnimationStarted_ &&
+        s_instance->recordSliderHint_ != nullptr && value != s_instance->currentGame_->maxPerEnd()) {
+        s_instance->recordSliderHintAnimationStarted_ = true;
+        lv_obj_clear_flag(s_instance->recordSliderHint_, LV_OBJ_FLAG_HIDDEN);
+        lv_anim_t recordHintAnimation;
+        lv_anim_init(&recordHintAnimation);
+        lv_anim_set_var(&recordHintAnimation, s_instance->recordSliderHint_);
+        lv_anim_set_values(&recordHintAnimation, 0, 100);
+        lv_anim_set_time(&recordHintAnimation, kRecordHintDurationMs);
+        lv_anim_set_repeat_count(&recordHintAnimation, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_set_exec_cb(&recordHintAnimation, animateRecordSliderHint);
+        lv_anim_start(&recordHintAnimation);
+    }
 }
 
 void AppController::onRecordEnd(lv_event_t*) {
+    lv_anim_del(s_instance->recordSliderHint_, animateRecordSliderHint);
+    s_instance->recordSliderHintAnimationStarted_ = false;
+    lv_obj_add_flag(s_instance->recordSliderHint_, LV_OBJ_FLAG_HIDDEN);
+
     const int32_t maxPerEnd = s_instance->currentGame_->maxPerEnd();
     const int32_t value = lv_slider_get_value(s_instance->slider_);
     const int32_t diff = maxPerEnd - value;
@@ -623,6 +651,7 @@ void AppController::onEndGameSliderReleased(lv_event_t* e) {
 
 void AppController::recordEnd(int team1Score, int team2Score) {
     if (!currentGame_->recordEnd(team1Score, team2Score)) return;
+    startRowHighlight(endRowIndex(currentGame_->ends().size() - 1));
     refreshEndsTable();
     storage_.saveInProgress(*currentGame_);
     if (scoreAnnouncer_ != nullptr) {
@@ -635,11 +664,38 @@ void AppController::recordEnd(int team1Score, int team2Score) {
 
 void AppController::recordDeadEnd() {
     if (!currentGame_->recordDeadEnd()) return;
+    startRowHighlight(endRowIndex(currentGame_->ends().size() - 1));
     refreshEndsTable();
     storage_.saveInProgress(*currentGame_);
     if (scoreAnnouncer_ != nullptr) {
         scoreAnnouncer_(currentGame_->team1().score, currentGame_->team2().score, true);
     }
+}
+
+int AppController::endRowIndex(size_t endIndex) const {
+    const bool hasHandicap = currentGame_->team1().handicap != 0 || currentGame_->team2().handicap != 0;
+    return static_cast<int>(endIndex + (hasHandicap ? 2 : 1));
+}
+
+void AppController::startRowHighlight(int row) {
+    highlightedRow_ = row;
+    if (highlightTimer_ != nullptr) {
+        lv_timer_del(highlightTimer_);
+    }
+    highlightTimer_ = lv_timer_create(onHighlightTimeout, kNewEndHighlightMs, nullptr);
+    lv_timer_set_repeat_count(highlightTimer_, 1);
+    if (endsTable_ != nullptr) {
+        lv_obj_invalidate(endsTable_);
+    }
+}
+
+void AppController::onHighlightTimeout(lv_timer_t* timer) {
+    s_instance->highlightedRow_ = -1;
+    s_instance->highlightTimer_ = nullptr;
+    if (s_instance->endsTable_ != nullptr) {
+        lv_obj_invalidate(s_instance->endsTable_);
+    }
+    lv_timer_del(timer);
 }
 
 void AppController::activateEndGameSlider() {
@@ -680,11 +736,11 @@ void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
     int awayTotal = game.team2().handicap;
     char buf[8];
     if (hasHandicap) {
-        lv_table_set_cell_value(table, 1, 0, "Hcap");
+        lv_table_set_cell_value(table, 1, 0, "H");
         std::snprintf(buf, sizeof(buf), "%d", homeTotal);
         lv_table_set_cell_value(table, 1, 1, buf);
         lv_table_set_cell_value(table, 1, 2, "-");
-        lv_table_set_cell_value(table, 1, 3, "Hcap");
+        lv_table_set_cell_value(table, 1, 3, "H");
         std::snprintf(buf, sizeof(buf), "%d", awayTotal);
         lv_table_set_cell_value(table, 1, 4, buf);
     }
@@ -718,13 +774,23 @@ void AppController::populateEndsTable(lv_obj_t* table, const BowlsGame& game) {
 
 void AppController::onEndsTableDrawPart(lv_event_t* e) {
     lv_obj_draw_part_dsc_t* dsc = lv_event_get_draw_part_dsc(e);
-    if (dsc->part != LV_PART_ITEMS || dsc->label_dsc == nullptr) return;
+    if (dsc->part != LV_PART_ITEMS) return;
 
     // Table cell "id" encodes row * col_cnt + col; decode both from it.
     lv_obj_t* table = static_cast<lv_obj_t*>(lv_event_get_target(e));
     const uint16_t colCnt = lv_table_get_col_cnt(table);
     const uint32_t row = dsc->id / colCnt;
     const uint32_t col = dsc->id % colCnt;
+
+    // Tint the just-recorded end's row so new scores are obviously new;
+    // startRowHighlight()/onHighlightTimeout() clear it again shortly after.
+    if (table == s_instance->endsTable_ && static_cast<int>(row) == s_instance->highlightedRow_ &&
+        dsc->rect_dsc != nullptr) {
+        dsc->rect_dsc->bg_color = lv_palette_lighten(LV_PALETTE_GREEN, 3);
+        dsc->rect_dsc->bg_opa = LV_OPA_COVER;
+    }
+
+    if (dsc->label_dsc == nullptr) return;
 
     // Score/total columns (0, 1, 3, 4) get the largest available font; the
     // header row and the small end-number column stay at the default size.
@@ -974,7 +1040,7 @@ void AppController::showSettings() {
     settingsBrightnessSlider_ = lv_slider_create(screen);
     lv_slider_set_range(settingsBrightnessSlider_, kMinBrightnessPercent, 100);
     lv_slider_set_value(settingsBrightnessSlider_, brightnessPercent_, LV_ANIM_OFF);
-    lv_obj_set_size(settingsBrightnessSlider_, LV_PCT(88), 40);
+    lv_obj_set_size(settingsBrightnessSlider_, kSliderWidth, 40);
     lv_obj_align(settingsBrightnessSlider_, LV_ALIGN_TOP_MID, 0, 96);
     lv_obj_add_event_cb(settingsBrightnessSlider_, onSettingsBrightnessChanged, LV_EVENT_VALUE_CHANGED,
                         nullptr);
@@ -992,7 +1058,7 @@ void AppController::showSettings() {
     settingsAudioVolumeSlider_ = lv_slider_create(screen);
     lv_slider_set_range(settingsAudioVolumeSlider_, 0, 100);
     lv_slider_set_value(settingsAudioVolumeSlider_, audioVolumePercent_, LV_ANIM_OFF);
-    lv_obj_set_size(settingsAudioVolumeSlider_, LV_PCT(88), 40);
+    lv_obj_set_size(settingsAudioVolumeSlider_, kSliderWidth, 40);
     lv_obj_align(settingsAudioVolumeSlider_, LV_ALIGN_TOP_MID, 0, 222);
     lv_obj_add_event_cb(settingsAudioVolumeSlider_, onSettingsAudioVolumeChanged,
                         LV_EVENT_VALUE_CHANGED, nullptr);
@@ -1021,11 +1087,29 @@ void AppController::onSettingsBrightnessChanged(lv_event_t* e) {
 }
 
 void AppController::applyBrightness() {
+    pushBrightnessToHardware();
+    storage_.saveBrightness(static_cast<uint8_t>((brightnessPercent_ * 255) / 100));
+}
+
+void AppController::pushBrightnessToHardware() {
     const uint8_t raw = static_cast<uint8_t>((brightnessPercent_ * 255) / 100);
     if (brightnessSetter_ != nullptr) {
         brightnessSetter_(raw);
     }
-    storage_.saveBrightness(raw);
+}
+
+void AppController::enterDisplaySleep() {
+    if (displaySleeping_) return;
+    displaySleeping_ = true;
+    if (brightnessSetter_ != nullptr) {
+        brightnessSetter_(0);
+    }
+}
+
+void AppController::exitDisplaySleep() {
+    if (!displaySleeping_) return;
+    displaySleeping_ = false;
+    pushBrightnessToHardware();
 }
 
 void AppController::onSettingsAudioVolumeChanged(lv_event_t* e) {
