@@ -59,6 +59,12 @@ private:
     void recordDeadEnd();
     void endCurrentGame();
     void refreshEndsTable();
+    // Row index (accounting for the handicap row, if any) for a given end.
+    int endRowIndex(size_t endIndex) const;
+    // Flashes the given ends-table row with a highlight that fades away
+    // shortly after, to draw the eye to a just-recorded score.
+    void startRowHighlight(int row);
+    static void onHighlightTimeout(lv_timer_t* timer);
     void updateSliderLabel(int32_t value);
     void activateEndGameSlider();
     void applyBrightness();
@@ -148,6 +154,10 @@ private:
     lv_obj_t* endsTable_ = nullptr;
     lv_obj_t* slider_ = nullptr;
     lv_obj_t* sliderLabel_ = nullptr;
+
+    // Table row (-1 = none) currently highlighted as a just-recorded end.
+    int highlightedRow_ = -1;
+    lv_timer_t* highlightTimer_ = nullptr;
 
     // "Slide to record" confirmation control at the bottom of the screen.
     lv_obj_t* recordSlider_ = nullptr;
