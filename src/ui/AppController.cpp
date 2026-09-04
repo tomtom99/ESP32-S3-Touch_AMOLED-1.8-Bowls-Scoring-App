@@ -87,6 +87,13 @@ void styleForwardButton(lv_obj_t* btn) {
     lv_obj_set_style_border_color(btn, lv_palette_darken(LV_PALETTE_GREEN, 2), 0);
 }
 
+void stylePastelOrangeSlider(lv_obj_t* slider) {
+    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 5), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 2), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider, lv_palette_lighten(LV_PALETTE_ORANGE, 3), LV_PART_KNOB);
+    lv_obj_set_style_border_color(slider, lv_palette_darken(LV_PALETTE_ORANGE, 1), LV_PART_KNOB);
+}
+
 void styleBodyLabel(lv_obj_t* label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(label, lv_color_black(), 0);
@@ -360,6 +367,7 @@ void AppController::showWinningScoreSetup() {
     lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 46);
 
     setupWinningScoreSlider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(setupWinningScoreSlider_);
     lv_slider_set_range(setupWinningScoreSlider_, 0, 2);
     lv_slider_set_value(setupWinningScoreSlider_, 2, LV_ANIM_OFF);
     lv_obj_set_size(setupWinningScoreSlider_, kSliderWidth, 54);
@@ -397,6 +405,7 @@ void AppController::showHandicapSetup() {
     styleBodyLabel(setupHomeHandicapLabel_);
     lv_obj_align(setupHomeHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 58);
     setupHomeHandicapSlider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(setupHomeHandicapSlider_);
     lv_slider_set_range(setupHomeHandicapSlider_, 0, 7);
     lv_obj_set_size(setupHomeHandicapSlider_, kSliderWidth, 36);
     lv_obj_align(setupHomeHandicapSlider_, LV_ALIGN_TOP_MID, 0, 90);
@@ -407,6 +416,7 @@ void AppController::showHandicapSetup() {
     styleBodyLabel(setupAwayHandicapLabel_);
     lv_obj_align(setupAwayHandicapLabel_, LV_ALIGN_TOP_LEFT, 16, 152);
     setupAwayHandicapSlider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(setupAwayHandicapSlider_);
     lv_slider_set_range(setupAwayHandicapSlider_, 0, 7);
     lv_obj_set_size(setupAwayHandicapSlider_, kSliderWidth, 36);
     lv_obj_align(setupAwayHandicapSlider_, LV_ALIGN_TOP_MID, 0, 184);
@@ -499,6 +509,7 @@ void AppController::showScoring() {
     lv_obj_align(sliderLabel_, LV_ALIGN_TOP_MID, 0, 340);
 
     slider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(slider_);
     lv_slider_set_range(slider_, 0, maxPerEnd * 2);
     lv_slider_set_value(slider_, maxPerEnd, LV_ANIM_OFF);
     lv_obj_set_size(slider_, kSliderWidth, 40);
@@ -1038,6 +1049,7 @@ void AppController::showSettings() {
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 56);
 
     settingsBrightnessSlider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(settingsBrightnessSlider_);
     lv_slider_set_range(settingsBrightnessSlider_, kMinBrightnessPercent, 100);
     lv_slider_set_value(settingsBrightnessSlider_, brightnessPercent_, LV_ANIM_OFF);
     lv_obj_set_size(settingsBrightnessSlider_, kSliderWidth, 40);
@@ -1056,6 +1068,7 @@ void AppController::showSettings() {
     lv_obj_align(audioLabel, LV_ALIGN_TOP_MID, 0, 184);
 
     settingsAudioVolumeSlider_ = lv_slider_create(screen);
+    stylePastelOrangeSlider(settingsAudioVolumeSlider_);
     lv_slider_set_range(settingsAudioVolumeSlider_, 0, 100);
     lv_slider_set_value(settingsAudioVolumeSlider_, audioVolumePercent_, LV_ANIM_OFF);
     lv_obj_set_size(settingsAudioVolumeSlider_, kSliderWidth, 40);
